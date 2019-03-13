@@ -1,0 +1,120 @@
+---
+title: Transformation Matrix
+author: Erik-Jan van Kesteren
+description: "An interactive blog on using matrices as operators"
+output: 
+  html_document:
+    theme: spacelab
+---
+<style>
+  input[type=number] {
+    width:4em;
+    height:2em;
+    border:none;
+    text-align:center;
+    -moz-appearance:textfield;
+  }
+  input[type=number]::inner-spin-button, 
+  input[type=number]::outer-spin-button { 
+    appearance: none; 
+    margin: 0; 
+  }
+  form {
+    display:inline-block;
+    margin-left:auto;
+    margin-right:auto;
+    border-left:1pt solid black;
+    border-right: 1pt solid black;
+    width: auto;
+  }
+  #formcontainer {
+    text-align:center;
+  }
+</style>
+
+Any set of points can be represented in a matrix $\boldsymbol{X}$. For example:
+
+$$ \boldsymbol{X} = \begin{bmatrix} 0 & 0 \\ 0 & 1 \\ 1 & 1 \\ 1 & 0 \end{bmatrix}$$
+The four rows in this matrix correspond to four points in two-dimensional space. You can think of the first column as the x coordinate and the second column as the y coordinate of each point. For our chosen $\boldsymbol{X}$, these points represent the corners of a unit square. 
+
+We can define a transformation matrix $\boldsymbol{T}$ as a $2\times 2$ matrix which through post-multiplication transforms these points into _another_ set of points in 2-dimensional space $\boldsymbol{X'}$. For example, we can take the identity matrix:
+
+$$\boldsymbol{T} = \boldsymbol{I} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$$
+
+This matrix is a kind of arbitrary transformation because by definition, $\boldsymbol{X'} = \boldsymbol{X} \times \boldsymbol{I} = \boldsymbol{X}$: the set of transformed points is the same as the set of original points.
+
+But what about a different transformation matrix, say
+
+$$\boldsymbol{T} = \begin{bmatrix} 1 & 0.5 \\ 0 & 1 \end{bmatrix}$$
+
+
+Now $\boldsymbol{X'}$ is not equal to $\boldsymbol{X}$: the points have been transformed! In particular, here we are dealing with a _skew_:
+
+$$\boldsymbol{X'} = \boldsymbol{X} \times \boldsymbol{T} = \begin{bmatrix} 0 & 0 \\ 0 & 1 \\ 1 & 1 \\ 1 & 0 \end{bmatrix} \times \begin{bmatrix} 1 & 0 \\ 0.5 & 1 \end{bmatrix} = \begin{bmatrix} 0 & 0 \\ 0.5 & 1 \\ 1.5 & 1 \\ 1 & 0 \end{bmatrix}$$
+
+## Let's visualise it
+Because this is all very abstract and a lot of numbers, below I've plotted the four points in $\boldsymbol{X}$, connected them by lines, coloured the center, and applied the _skew_ transformation, yielding $\boldsymbol{X'}$. 
+
+I've also gone a bit further and made it interactive[^1]. So you can edit the numbers in the matrix and the unit square will transform accordingly. Play around with it to get an idea of transforming a set of points in 2-dimensional space.
+
+[^1]: Using JavaScript, SVG, and CSS. See the [source](https://github.com/vankesteren/blog-source/blob/master/content/blog/2018-03-03-transformation-matrix.Rmd) of this blog post for more info.
+
+<div id="formcontainer">
+<form id="matform">
+  <input name="a" type="number" step="0.01" value="1">
+  <input name="c" type="number" step="0.01" value="0"><br>
+  <input name="b" type="number" step="0.01" value="0.5">
+  <input name="d" type="number" step="0.01" value="1">
+</form>
+</div>
+
+<br>
+<div id="svg-container" style="margin-left:auto;margin-right:auto;width:80%;min-height:200px;background-color:#FAFAFA">
+  <svg id="rectsvg" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-1 -2 3 3">
+    <g transform="scale(1,-1)">
+    <rect id="bg" width="1" height="1" fill="rgba(0,0,0,0)" style="stroke-width:0.001;stroke:rgb(0,0,0);"/>
+    <rect id="transhere" width="1" height="1" fill="rgba(0,0,255,0.2)" style="stroke-width:0.01;stroke:rgb(0,0,0);"/>
+    </g>
+  </svg>
+</div>
+
+
+## Determinant
+Now that you have gained a feeling or intuition around the transformation matrix, I'll tell you a great geometric trick I learnt from [this youtube video](https://www.youtube.com/watch?v=xX7qBVa9cQU): the surface area of $\boldsymbol{X'}$ is equal to the size of the _determinant_ of the transformation matrix $\boldsymbol{T}$. This was a great revelation for me that made determinants much more easy to comprehend. This works in higher dimensions too: the transformed volume of a $k$-dimensional unit hypercube represents the size of the determinant of the transformation matrix $\boldsymbol{T} \in \mathbb{R}^k$.
+
+But we're not there yet: determinants can be negative, wheras volumes and areas can't. Luckily, the sign of the determinant can be inferred from $\boldsymbol{X'}$ too. Specifically, it has to do with the _chirality_ of the shape defined by $\boldsymbol{X'}$. If the original square "flips" -- that is, the original bottom right point becomes the new top left point or the original bottom left point becomes the new top right point -- the sign of the determinant will be negative. In the illustration, that will make the shaded area red instead of blue.
+
+The determinant of the currently entered $\boldsymbol{T}$ is <span id="det">0</span>.
+
+
+## Top tips to try
+1. Try to make $\boldsymbol{T}$ look like a covariance matrix.
+2. Try to make the columns in $\boldsymbol{T}$ linearly dependent.
+3. Try to flip the rows or columns of $\boldsymbol{T}$ at any point.
+
+## Conclusion
+Through exploring interactively what a transformation matrix does to a unit square, we can generate an intuition for the geometric meaning of the determinant.
+
+<script type="text/javascript">
+  var frm = document.getElementById("matform");
+  function runForm() {
+    let a = Number(frm.elements[0].value);
+    let b = Number(frm.elements[1].value);
+    let c = Number(frm.elements[2].value);
+    let d = Number(frm.elements[3].value);
+    setMatrix(a,b,c,d,0,0);
+  }
+  function setMatrix(a,b,c,d,e,f) {
+    let mat = "matrix(" + [a,b,c,d,e,f].join(",") + ")";
+    document.getElementById("transhere").setAttribute("transform",mat);
+    let det = a * d - c * b
+    document.getElementById("det").innerHTML = det.toString();
+    if (det > 0) {
+      document.getElementById("transhere").setAttribute("fill","rgba(0,0,255,0.2)");
+    } else {
+      document.getElementById("transhere").setAttribute("fill","rgba(255,0,0,0.2)");
+    }
+  }
+  runForm();
+  frm.onchange = runForm;
+</script>

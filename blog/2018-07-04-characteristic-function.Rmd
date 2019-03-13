@@ -1,0 +1,118 @@
+---
+title: Characteristic Function
+author: Erik-Jan van Kesteren
+description: "Visualising the characteristic function and eigenvalues of a matrix"
+output: 
+  html_document:
+    theme: spacelab
+---
+
+```{r setup, include=FALSE, echo=FALSE,render=FALSE,warning=FALSE,background=TRUE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dev = 'svg')
+```
+
+## Packages needed for this blog
+```{r pkg, echo=TRUE,warning=FALSE,background=TRUE, message=FALSE}
+library(ggplot2)
+library(manipulate)
+library(firatheme) # https://github.com/vankesteren/firatheme
+library(Massign)   # https://github.com/vankesteren/Massign
+```
+
+## The characteristic function
+
+A while ago, I blogged that a matrix $A$ can be seen as an [operation](../transformation-matrix) and that the determinant of this matrix $|A|$ says something about the volume of the transformation. This blog is about another property of matrices: the characteristic function.
+
+The characteristic function of a square matrix $A$ of order $n$ is defined as follows:
+
+$$p_A(\lambda) = | \lambda I_n - A |$$
+
+Let's look at this function for the following $2\times 2$ matrix:
+
+$$A = \begin{bmatrix} 3 & 1 \\ 2 & 4  \end{bmatrix}$$
+$$ \begin{align} 
+p_A(\lambda) &= | \lambda I_n - A | \\
+&= \left| \begin{bmatrix} \lambda & 0 \\ 0 & \lambda \end{bmatrix} - \begin{bmatrix} 3 & 1 \\ 2 & 4  \end{bmatrix} \right| \\
+&= \left| \begin{bmatrix} \lambda - 3 & -1 \\ -2 & \lambda - 4  \end{bmatrix} \right|\\
+\end{align}$$
+
+The roots of this function - a polynomial of order $n$ - are the eigenvalues of the matrix. We can find them using some algebra, remembering that the determinant of a $2\times 2$ matrix is calculated as $ad-bc$:
+
+$$ \begin{align}
+p_A(\lambda) &= (\lambda - 3)(\lambda - 4) + 2\\
+&= \lambda^2 - 7\lambda + 10 \\
+&= (\lambda - 2)(\lambda - 5)
+\end{align}$$
+
+So $\lambda = 2$ or $\lambda = 5$. These are the two eigenvalues of this matrix.
+
+## Visualising the characteristic function
+
+Using the power of `R`, we can get a better intuition for the characteristic function by visualising it. Below the code for a function that takes a matrix and visualises this function.
+
+```{r, echo=TRUE}
+charfun <- function(mat, from, to) {
+  n <- ncol(mat)
+  stopifnot(n == nrow(mat))
+  x <- seq(from, to, length.out = 3000)
+  
+  ggdat <- data.frame(
+    x = x,
+    y = vapply(x, function(lambda) det(lambda*diag(n) - mat), 1.0)
+  )
+  ev <- eigen(mat)$values
+  ev <- ev[ev <= to & ev > from]
+  
+  evdat <- data.frame(x = ev, y = rep(0, length(ev)))
+  
+  ggplot(ggdat, aes(x = x, y = y)) + 
+    geom_hline(yintercept = 0, col = firaCols[5], lwd = 1) +
+    geom_vline(xintercept = ev, col = firaCols[2], lwd = 1, lty = 2) +
+    geom_line(col = firaCols[1], lwd = 1) + 
+    geom_point(aes(x, y), evdat, size = 3, col = firaCols[1]) +
+    labs(x = "Lambda", 
+         y = "Characteristic function value", 
+         title = "Characteristic function of a matrix") +
+    theme_fira()
+}
+
+A %<-% "3, 1
+        2, 4"
+
+charfun(A, 0, 7) + ggtitle("Characteristic function of A")
+```
+
+## What can we see?
+1. The characteristic function crosses the axis at 2 and 5, just as we expected
+2. The characteristic function is indeed a quadratic function, i.e., a polynomial of order $n = 2$.
+
+You can play around with this function in `R` by trying out different matrices. Try out a covariance matrix, different kinds of symmetric and assymmetric matrices!
+
+## Bonus: interactive
+After running the above `R` chunks, you can run the following to play around with different covariance matrices of the following form:
+
+$$A = \begin{bmatrix} 1 & a & b \\ a & 1 & c \\ b & c & 1 \end{bmatrix}$$
+Play around with it to see what happens to the eigenvalues of this matrix! For example, note that when a, b, c, and d are all 0 the eigenvalues are all 1. There are some nice symmetries to be explored here.
+
+```{r, echo=TRUE, warning=FALSE, eval=FALSE}
+manipulate(
+  {
+    A %<-% " 1,
+             a,  1
+             b,  c,  1"
+    charfun(A, 0, 2) + ylim(c(-.7,.7))
+  },
+  a = slider(-1, 1, initial = .5, step = 0.1),
+  b = slider(-1, 1, initial = .3, step = 0.1),
+  c = slider(-1, 1, initial = .2, step = 0.1)
+)
+```
+
+
+```{r, echo=FALSE}
+A %<-% " 1,
+        .5,  1
+        .3,  .2,  1"
+charfun(A, 0, 2) + ylim(c(-.7,.7))
+```

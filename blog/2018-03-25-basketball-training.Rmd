@@ -1,0 +1,129 @@
+---
+title: Basketball Training
+author: Erik-Jan van Kesteren
+description: "A small investigation into markov chains using a manually collected datasets"
+output: 
+  html_document:
+    theme: spacelab
+---
+
+
+```{r setup, include=FALSE, echo=FALSE,render=FALSE,warning=FALSE,background=TRUE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dev = 'svg')
+library(tidyverse)
+library(expm)
+library(firatheme)
+```
+
+## Introduction
+
+I was on holiday and had to wait a while. Fortunately, close to where I was sitting there was a kid playing basketball all by himself. Of course I had to record how many hits and misses he made, to keep it as a nice dataset for further analysis.
+
+Here is the dataset:
+```{r init}
+basket <- c("miss","miss","miss","hit","miss","hit","miss", "miss",
+            "hit","hit","miss","miss","miss","miss", "miss","miss",
+            "miss","hit","hit","hit","miss","hit")
+```
+
+## What can we do with this?
+Firstly, we can describe how often the kid manages to score a point:
+
+```{r plot, echo = FALSE}
+ggplot(data.frame(basket = basket), aes(x = basket)) + 
+  geom_bar(fill = firaCols[c(3, 5)], width = 0.7) + 
+  labs(x = "Throw", y = "Count", title = "Basketball hits and misses") +
+  theme_fira()
+```
+
+So it looks like the kid misses a bit more than he hits. But there is much more information in this dataset: besides whether the kid hits or misses, we can say something about the _sequence_ of these events. 
+
+## Transition matrix
+
+From a sequence of observations, it is possible to construct a transition matrix
+
+$$
+\begin{bmatrix}
+A & B \\
+C & D 
+\end{bmatrix}
+$$
+Where the elements indicate the probability that:
+
+- $A$: a hit is followed by another hit
+- $B$: a hit is followed by a miss!
+- $C$: a miss is followed by a hit
+- $D$: a miss is followed by another miss
+
+In other words, $B$ and $C$ indicate how likely it is to _transition_ from hit to miss and vice versa, whereas $A$ and $C$ indicate how likely it is to stay in the same state (_transition_ to self).
+
+If we don't know the true probabilities, we can enter the observed probabilities into the matrix. Here is an `R` function for generating the transition matrix from the data vector of before:
+
+```{r transmat}
+transMat <- function(x, prob = TRUE) {
+  X <- t(as.matrix(x))
+  tt <- table( c(X[,-ncol(X)]), c(X[,-1]) )
+  if (prob) tt <- tt / rowSums(tt)
+  tt
+}
+
+transitionMatrix <- transMat(basket)
+print(transitionMatrix, digits = 2)
+
+```
+
+## Markov chain
+This transition matrix completely defines the 2-state markov chain. Assuming these probabilities are stable, we can now generate processes just like the one we observed. And we can nicely visualise it using [this markov chain generator post](http://setosa.io/ev/markov-chains/) by [setosa](http://setosa.io/ev/). Go to [this link](http://setosa.io/markov/index.html#%7B%22tm%22%3A%5B%5B0.43%2C0.57%5D%2C%5B0.36%2C0.64%5D%5D%7D) to play around!
+
+<img src="mcbasket.png" style="width:70%;display:block; margin-left:auto; margin-right:auto"></img>
+
+## Steady state 
+If we assume this chain is stable over time, there is another nice property. Irrespective of the initial probabilities of hitting or missing that we choose, after a few steps of the markov process, the probability of hitting the basket already converges to the _steady state_:
+
+```{r initprob, echo=FALSE}
+probs <- (1:10)/10
+steady <- matrix(0, ncol = 10, nrow = 7)
+
+for (i in 1:7) {
+  for (p in 1:10) {
+    outprobs <- c(probs[p], 1-probs[p])%*%(transitionMatrix%^%i)
+    steady[i, p] <- outprobs[1]
+  }
+}
+
+steady %>% as.tibble %>% set_names(probs) %>% 
+  mutate(moves = 1:7) %>% gather("initial", "final", -moves) %>% 
+  arrange(-as.numeric(initial)) %>% 
+  ggplot(aes(x = moves, y = final, 
+             colour = factor(initial, 
+                             levels = unique(initial)))) +
+  geom_line(size = 1) + 
+  labs(title = "Converging to steady state", 
+       colour = "Initial hit probability", 
+       y = "Hit probability on this move", 
+       x = "Move number") +
+  theme_fira() +
+  scale_colour_fira()
+
+```
+
+In general, we can calculate the steady state easily from the transition matrix:
+
+```{r steady}
+someBigNumber <- 1000
+diag(transitionMatrix %^% someBigNumber)
+```
+
+Note that this leads to a similar but different result than simply counting the probability of hitting or missing as a table, as we did in the first figure:
+
+```{r proptab}
+table(basket)/length(basket)
+``` 
+
+# Questions
+
+- What should we trust here? The naïve probabilities or the markov steady state?
+- Which assumptions lead to this discrepancy?
+- Does the transition matrix really contain more relevant information about this process than the observed hit rate?
+
