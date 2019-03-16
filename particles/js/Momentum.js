@@ -24,7 +24,8 @@ class Momentum {
         this.surface = new Surface(2, 2, 0.5);
 
         // animation stuff
-        this.anispeed = 0.05;
+        this.anispeed  = 0.05;
+        this.sizerange = 10;
         
 
     }
@@ -46,7 +47,8 @@ class Momentum {
             let vel = [ ( Math.random() - 0.5 ) * vrange * this.anispeed, 
                         ( Math.random() - 0.5 ) * vrange * this.anispeed];
             let m   = 1 + Math.random() * mrange;
-            this.particles.push(new Particle(pos, m, vel, this.surface, this.origin))
+            this.particles.push(new Particle(pos, m, vel, 
+                this.surface, this.sizerange))
         }
 
         // attach new DOM elements
