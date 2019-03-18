@@ -17,8 +17,24 @@
     </div>
 </body>
 <script>
-var mm = new Momentum("momentum-div");
-mm.initParticles(20, prange = 2, vrange = 2, mrange = 3);
-mm.start();
+    // Initialize momentum framework
+    var mm = new Momentum("momentum-div");
+    mm.initParticles(20, prange = 2, vrange = 2, mrange = 3);
+
+    // Animation functions
+    var frame = null;
+    step = function(timestamp) {
+        frame = requestAnimationFrame(step);
+        mm.draw(1 / 60);
+    }
+    animate = function() {
+        requestAnimationFrame(step);
+    }
+    stop    = function() {
+        cancelAnimationFrame(frame);
+    }
+
+    // start the animation
+    animate();
 </script>
 </html>

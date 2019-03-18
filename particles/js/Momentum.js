@@ -85,17 +85,8 @@ class Momentum {
         this.svg.appendChild(this.particles[this.particles.length - 1].element);
     }
 
-    start(fps = 60) {
-        // Start the animation with a set number of frames per second
-        clearInterval(this.timer);
-        this.timer = setInterval( () => {
-            this.particles.map((p) => p.update(1/fps*this.anispeed));
-        }, 1000/fps);
-    }
-
-    stop() {
-        // Stop the animation
-        clearInterval(this.timer);
+    draw(dt) {
+        this.particles.map((p) => p.update(dt*this.anispeed));
     }
 }
 
