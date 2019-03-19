@@ -32,10 +32,10 @@ class Particle {
         this.element.setAttributeNS(null, "fill", "rgb(128, 128, 128)");
     }
 
-    update(t) { 
-        // t = time interval
+    update(dt) { 
+        // dt = time interval
         // calculate the new position and velocity of the particle
-        let step = this.surface.grad(this.pos).vecprod([-t, -t]);
+        let step = this.surface.grad(this.pos).vecprod([-dt, -dt]);
         this.v   = this.v.vecprod(this.m).vecsum(step).vecdiv(this.m);
         this.pos = this.pos.vecsum(this.v);
 

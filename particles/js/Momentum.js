@@ -36,11 +36,11 @@ class Momentum {
         this.parent.appendChild(this.svg);
 
         // Instantiate the surface for the particles
-        this.surface = new Surface(2, 2, 0);
+        this.surface = new BiNormNegLogLik();
 
         // animation stuff
         this.anispeed  = 0.05;
-        this.sizerange = 10;
+        this.sizerange = 12.5;
     }
 
     // ---------------
