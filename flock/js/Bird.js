@@ -20,7 +20,11 @@ class Bird {
         this.pos        = pos;        // position
         this.m          = [ m, m ];   // importance
         this.v          = v;          // velocity (array of 2)
-        this.neighbours = [];         // list of neighbours
+        this.neighbours = { // list of neighbours
+            separation : [],
+            alignment  : [],
+            cohesion   : []
+        };         
         this.flock      = flock;      // reference to field
         
         // Create an svg circle element for this particle
@@ -34,15 +38,32 @@ class Bird {
 
 
     findNeighbours() {
-        this.neighbours = [];
+        this.neighbours = { // list of neighbours
+            separation : [],
+            alignment  : [],
+            cohesion   : []
+        };   
         let dists = this.flock.birds.map((b) => {
             return this.pos.dot(b.pos)
         });
-        dists
+        let dists_sorted = dists
             .map((val, i) => { return {value: val, index: i}; })
             .sort((a, b) => { return a.value - b.value; })
-            .slice(0, this.flock.attention)
-            .map((d) => { this.neighbours.push(this.flock.birds[d.index]); });
+        
+        // separation
+        dists_sorted
+            .slice(0, this.flock.params.separation.k)
+            .map((d) => { this.neighbours.separation.push(this.flock.birds[d.index]); });
+        
+        // alignment
+        dists_sorted
+            .slice(0, this.flock.params.alignment.k)
+            .map((d) => { this.neighbours.alignment.push(this.flock.birds[d.index]); });
+        
+        // cohesion
+        dists_sorted
+            .slice(0, this.flock.params.cohesion.k)
+            .map((d) => { this.neighbours.cohesion.push(this.flock.birds[d.index]); });
     }
 
     destroy() {
@@ -52,25 +73,63 @@ class Bird {
     
     update(dt) { 
         // dt = time interval
+
+        // find the neighbours
         this.findNeighbours();
         // calculate the new position and velocity of the particle
         
-        let vel = [ ( Math.random() - 0.5 ) * this.flock.randv * dt, 
-                    ( Math.random() - 0.5 ) * this.flock.randv * dt ];
-        this.neighbours.map((bird) => { 
-            let step = bird.pos
-                .vecmin(this.pos)
-                .vecsum(bird.v.vecmin(this.v))
-                .vecprod(bird.m)
-                .vecprod([dt, dt])
-                .vecdiv([2*this.flock.attention, 2*this.flock.attention]);
-            this.v   = this.v.vecprod(this.m).vecsum(step).vecsum(vel).vecdiv(this.m);
+
+        // separation velocity
+        let v_sep = [ 0, 0 ];
+        this.neighbours.separation.map((bird) => { 
+            v_sep = v_sep.vecsum(this.pos.vecmin(bird.pos));
         });
+        v_sep = v_sep.vecdiv([ this.flock.params.separation.k, 
+                               this.flock.params.separation.k ]);
+
+        // alignment velocity
+        let v_ali = [ 0, 0 ];
+        this.neighbours.alignment.map((bird) => {
+            v_ali = v_ali.vecsum(bird.v);
+        })
+        v_ali = v_ali.vecdiv([ this.flock.params.alignment.k, 
+                               this.flock.params.alignment.k ]);
         
-        this.pos = this.pos.vecsum(this.v);
+        // cohesion velocity
+        let v_coh = [ 0, 0 ];
+        this.neighbours.cohesion.map((bird) => {
+            v_coh = v_coh.vecsum(bird.pos.vecmin(this.pos));
+        })
+        v_ali = v_ali.vecdiv([ this.flock.params.cohesion.k, 
+                               this.flock.params.cohesion.k ]);
+
+        // center component
+        let v_ctr = [ 0, 0 ].vecmin(this.pos);
+        
+        // random component
+        let v_rand = [ ( Math.random() - 0.5 ) * this.flock.params.randv * dt, 
+                       ( Math.random() - 0.5 ) * this.flock.params.randv * dt ];
+
+        
+        
+        this.v   = this.v
+            .vecprod(this.m)
+            .vecsum(v_sep.vecprod([ this.flock.params.separation.weight,
+                                    this.flock.params.separation.weight ]))
+            .vecsum(v_ali.vecprod([ this.flock.params.alignment.weight,
+                                    this.flock.params.alignment.weight ]))
+            .vecsum(v_coh.vecprod([ this.flock.params.cohesion.weight,
+                                    this.flock.params.cohesion.weight ]))
+            .vecsum(v_ctr.vecprod([ this.flock.params.center.weight,
+                                    this.flock.params.center.weight ]))
+            .vecsum(v_rand)
+            .vecdiv(this.m);
+        
+        this.pos = this.pos.vecsum(this.v.vecprod([ dt * this.flock.anispeed, 
+                                                    dt * this.flock.anispeed]));
 
         // update the position of the associated DOM element
-        this.element.setAttributeNS(null, "cy", -this.pos[1]);
-        this.element.setAttributeNS(null, "cx", this.pos[0]);
+        this.element.setAttributeNS(null, "cy", -(this.pos[1] % 5));
+        this.element.setAttributeNS(null, "cx", this.pos[0] % 5);
     }
 }

@@ -37,8 +37,26 @@ class Flock {
 
         // Instantiate the array for the birds
         this.birds = [];
-        this.attention = 5;
-        this.randv = 0.1;
+        
+        // Flocking parameters
+        this.params = {
+            separation : {
+                k : 7,
+                weight : 0.5
+            },
+            alignment : {
+                k : 7,
+                weight : 0.1
+            },
+            cohesion : {
+                k : 30,
+                weight : 0.4
+            },
+            center : {
+                weight : 0.1
+            },
+            randv : 0.5 // random velocity component
+        }
 
         // animation stuff
         this.anispeed  = 0.05;
@@ -47,7 +65,7 @@ class Flock {
     // ---------------
     // Public methods
     // ---------------
-    initBirds(n = 50, prange = 1.5, vrange = 0.5, mrange = 0) {
+    initBirds(n = 50, prange = 2, vrange = 500, mrange = 0) {
         // Empty particles and DOM elements
         this.birds = [ ];
         while (this.svg.firstChild) {
@@ -58,8 +76,8 @@ class Flock {
         for (var i = 0; i < n; i++) {
             let pos = [ ( Math.random() - 0.5 ) * prange, 
                         ( Math.random() - 0.5 ) * prange ];
-            let vel = [ ( Math.random() - 0.5 ) * vrange * this.anispeed, 
-                        ( Math.random() - 0.5 ) * vrange * this.anispeed];
+            let vel = [ ( Math.random() - 0.5 ) * vrange, 
+                        ( Math.random() - 0.5 ) * vrange ];
             let m   = 1 + Math.random() * mrange;
             this.birds.push(new Bird(pos, m, vel, this));
         }
@@ -71,12 +89,12 @@ class Flock {
 
     draw(dt) {
         this.birds.map((b) => b.update(dt*this.anispeed));
-        this.birds.map((b, idx) => {
-            if (b.pos[0] > 5 | b.pos[0] < -5 | b.pos[1] > 5 | b.pos[1] < -5) {
-                this.svg.removeChild(this.svg.children[idx]);
-                this.birds.splice(idx, 1);
-            }
-        })
+        // this.birds.map((b, idx) => {
+        //     if (b.pos[0] > 5 | b.pos[0] < -5 | b.pos[1] > 5 | b.pos[1] < -5) {
+        //         this.svg.removeChild(this.svg.children[idx]);
+        //         this.birds.splice(idx, 1);
+        //     }
+        // })
     }
 }
 
