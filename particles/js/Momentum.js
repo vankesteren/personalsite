@@ -46,7 +46,7 @@ class Momentum {
     // ---------------
     // Public methods
     // ---------------
-    initParticles(n, prange = 0, vrange = 0, mrange = 0) {
+    initParticles(n = 20, prange = 2, vrange = 2, mrange = 3) {
         // Empty particles and DOM elements
         this.particles = [ ];
         while (this.svg.firstChild) {
