@@ -1,0 +1,13 @@
+#momentum-div {
+    width: 99vw;
+    height: 99vh;
+    margin: auto;
+}
+body {
+    margin:0;
+    background: #343434;
+}
+.mm-svg {
+    width: 100%;
+    height: 100%;
+}
