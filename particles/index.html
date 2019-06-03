@@ -22,15 +22,35 @@
     mm.initParticles(20, prange = 2, vrange = 2, mrange = 3);
 
     // Animation functions
-    var frame = null;
+    var frame;
+    const times = [];
+    var fps = 60;
+    var smooth = 60;
     step = function(timestamp) {
+        // animation frame requesting with smooth fps estimation
+        const now = performance.now();
+        while (times.length > 0 && times[0] <= now - 1000) {
+            times.shift();
+        }
+        times.push(now);
+        fps = times.length;
+
+        // starting fps estimate is bad for a second, 
+        // assume 60fps until then.
+        if (smooth > 0) {
+            mm.draw(1/(smooth + fps));
+            smooth--
+        } else {
+            mm.draw(1/fps);
+        }
+
+        // callback self
         frame = requestAnimationFrame(step);
-        mm.draw(1 / 60);
     }
     start = function() {
         requestAnimationFrame(step);
     }
-    stop    = function() {
+    stop = function() {
         cancelAnimationFrame(frame);
     }
 
