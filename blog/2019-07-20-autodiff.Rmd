@@ -1,0 +1,69 @@
+---
+title: "Linear regression using automatic differentiation in Julia"
+author: "Lara Rösler"
+date: "20/07/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# note that we need the package JuliaCall and a recent version of julia with
+# the package Zygote installed. Set the julia directory below to make it work!
+Sys.setenv("JULIA_HOME" = "C:\\Users\\erikj\\AppData\\Local\\Julia-1.1.1\\bin")
+```
+
+Julia is the new kid on the block in data science programming language-land. It has some great features, a very special architecture and a great community already. In this notebook, I show a magical feature of an under-development package called [Zygote](https://github.com/FluxML/Zygote.jl): fully automatic differentiation of (almost) any function written in Julia. In other words, you can write any function in Julia, and Zygote will tell you how to change its inputs to minimize the output.
+
+In this notebook, I showcase this feature for linear regression without going into detail on the precise architecture underlying Zygote. All you need to know is that Zygote analyses the low-level representation of the function you write to compile a derivative function on the fly! Let's build a linear regression model based on gradient descent using automatic differentiation in Julia.
+
+```{julia using}
+using Zygote: gradient
+```
+
+First, I generate some data: a random normal design matrix $X$ with 10 variables and a sample size of 1000. The target / dependent variable $y$ is computed as $Xb + \epsilon$, where b is a vector from 1 to 10, and the error is standard normal.
+
+```{julia datagen, results = "hide"}
+X = randn(1000, 10)
+b = (1:10)
+y = X * b + randn(1000)
+```
+
+Then, I determine the objective function. In the linear regression case, I want to estimate the least squares solution. Therefore, I create a function that has as its inputs the parameter estimates, and as its output the mean square error of the predictions based on these estimates. Note that for this to work, the function can also the sum of squared errors. This step is not limited to square error, either! Absolute error, or even any likelihood function of your choice is allowed.
+
+```{julia mse}
+# MSE for linear model
+function mse(bhat)
+    res = y - X * bhat
+    res'res / length(res)
+end
+```
+
+Let's test this function! For a vector of zeroes, the mse is the following:
+
+```{julia mse2}
+mse(zeros(10))
+```
+
+And for our pre-specified true estimates, the MSE is the following:
+
+```{julia mse3}
+mse(b)
+```
+
+Much lower, because these parameters are better at predicting the observed $y$, in terms of the mean squared error. The objective, in least squares estimation, is to _minimize_ the MSE. We can use Zygote to tell us how to change the input of the MSE function to move towards the minimum!
+
+The next lines are where the autodiff magic happens. Here, I use the `gradient` function to create a function that has as its inputs the current parameter estimates, and outputs the gradient with respect to the objective we have defined here. 
+
+```{julia grad}
+# Gradient w.r.t. parameters
+grad(bhat) = gradient(mse, bhat)[1]
+```
+
+That is a very short piece of code to do a very complicated thing! Applying the `grad` function to a vector of zeroes results in the following:
+
+```{julia grad2}
+precompile(grad)
+grad(zeros(10))
+```
+
+:( it's not working in notebook form!
