@@ -63,3 +63,9 @@ a:hover {
 .maintext > ul {
     list-style: circle;
 }
+
+.indent {
+    text-indent: -3rem;
+    padding-left: 3rem;
+    list-style: none;
+}
