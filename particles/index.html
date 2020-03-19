@@ -13,7 +13,7 @@
 </head>
 <body>
     <div id="momentum-div">
-
+        <!-- the animation comes here -->
     </div>
 </body>
 <script>
@@ -21,31 +21,25 @@
     var mm = new Momentum("momentum-div");
     mm.initParticles(20, prange = 2, vrange = 2, mrange = 3);
 
-    // Animation functions
-    var frame;
-    const times = [];
+    // Animation functions with 60FPS limit
+    // https://stackoverflow.com/a/19772220/8311759
+    var frame, now, elapsed;;
+    var frameCount = 0;
     var fps = 60;
-    var smooth = 60;
+    var fpsInterval = 1000 / fps;
+    var then = performance.now();
+
     step = function(timestamp) {
-        // animation frame requesting with smooth fps estimation
-        // let now = performance.now();
-        // while (times.length > 0 && times[0] <= now - 1000) {
-        //     times.shift();
-        // }
-        // times.push(now);
-        // fps = times.length;
-
-        // starting fps estimate is bad for a second, 
-        // assume 60fps until then.
-        // if (smooth > 0) {
-        //     mm.draw(1/(smooth + fps));
-        //     smooth--
-        // } else {
-            mm.draw(1/fps);
-        // }
-
         // callback self
         frame = requestAnimationFrame(step);
+
+        now = performance.now();
+        elapsed = now - then;
+
+        if (elapsed > fpsInterval) {
+            then = now - (elapsed % fpsInterval);
+            mm.draw(1/fps);
+        }
     }
     start = function() {
         requestAnimationFrame(step);
