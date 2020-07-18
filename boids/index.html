@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Boids</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" media="screen" href="css/main.css">
+    <script src="js/matrixop.js"></script>
+    <script src="js/Surface.js"></script>
+    <script src="js/Particle.js"></script>
+    <script src="js/Momentum.js"></script>
+</head>
+<body>
+    <div id="momentum-div">
+        <!-- the animation comes here -->
+    </div>
+</body>
+<script>
+    // Initialize momentum framework
+    var mm = new Momentum("momentum-div");
+    mm.initParticles(5, prange = 2, vrange = 2, mrange = 3);
+
+    // Animation functions with 60FPS limit
+    // https://stackoverflow.com/a/19772220/8311759
+    var frame, now, elapsed;;
+    var frameCount = 0;
+    var fps = 60;
+    var fpsInterval = 1000 / fps;
+    var then = performance.now();
+
+    step = function(timestamp) {
+        // callback self
+        frame = requestAnimationFrame(step);
+
+        now = performance.now();
+        elapsed = now - then;
+
+        if (elapsed > fpsInterval) {
+            then = now - (elapsed % fpsInterval);
+            mm.draw(1/fps);
+        }
+    }
+    start = function() {
+        requestAnimationFrame(step);
+    }
+    stop = function() {
+        cancelAnimationFrame(frame);
+    }
+
+    // start the animation
+    start();
+</script>
+</html>

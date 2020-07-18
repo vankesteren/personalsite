@@ -24,4 +24,3 @@ Array.prototype.multiply = function(b) { return this.map(x => b.t().map(y => x.d
 Array.prototype.vecprod  = function(b) { return this.map((x, i) => this[i] * b[i]); }
 Array.prototype.vecdiv   = function(b) { return this.map((x, i) => this[i] / b[i]); }
 Array.prototype.vecsum   = function(b) { return this.map((x, i) => this[i] + b[i]); }
-Array.prototype.vecmin   = function(b) { return this.map((x, i) => this[i] - b[i]); }

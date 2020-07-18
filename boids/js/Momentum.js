@@ -14,7 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 // Main class defining a momentum animation in an svg object on a webpage
-class Flock {
+class Momentum {
     constructor(parent) {
         // The momentum object should be associated with a parent element
         if (typeof parent === "string") {
@@ -35,66 +35,70 @@ class Flock {
         this.svg.setAttribute("xmlns", ns);
         this.parent.appendChild(this.svg);
 
-        // Instantiate the array for the birds
-        this.birds = [];
-        
-        // Flocking parameters
-        this.params = {
-            separation : {
-                k : 7,
-                weight : 0.5
-            },
-            alignment : {
-                k : 7,
-                weight : 0.1
-            },
-            cohesion : {
-                k : 30,
-                weight : 0.4
-            },
-            center : {
-                weight : 0.1
-            },
-            randv : 0.5 // random velocity component
-        }
+        // Instantiate the surface for the particles
+        this.surface = new BiNormNegLogLik();
 
         // animation stuff
         this.anispeed  = 0.05;
+        this.sizerange = 12.5;
     }
 
     // ---------------
     // Public methods
     // ---------------
-    initBirds(n = 50, prange = 2, vrange = 500, mrange = 0) {
+    initParticles(n = 20, prange = 2, vrange = 2, mrange = 3) {
         // Empty particles and DOM elements
-        this.birds = [ ];
+        this.particles = [ ];
         while (this.svg.firstChild) {
             this.svg.removeChild(this.svg.firstChild);
         }
 
-        // Generate birds
+        // Generate particles
         for (var i = 0; i < n; i++) {
             let pos = [ ( Math.random() - 0.5 ) * prange, 
                         ( Math.random() - 0.5 ) * prange ];
-            let vel = [ ( Math.random() - 0.5 ) * vrange, 
-                        ( Math.random() - 0.5 ) * vrange ];
+            let vel = [ ( Math.random() - 0.5 ) * vrange * this.anispeed, 
+                        ( Math.random() - 0.5 ) * vrange * this.anispeed];
             let m   = 1 + Math.random() * mrange;
-            this.birds.push(new Bird(pos, m, vel, this));
+            this.particles.push(new Particle(pos, m, vel, 
+                                             this.surface, this.sizerange));
         }
 
         // attach new DOM elements
-        this.birds.map((p) => this.svg.appendChild(p.element));
+        this.particles.map((p) => this.svg.appendChild(p.element));
 
     }
 
+    addParticle(prange = 0, vrange = 0, mrange = 0) {
+        // generate particle parameters
+        let pos = [ ( Math.random() - 0.5 ) * prange, 
+                    ( Math.random() - 0.5 ) * prange ];
+        let vel = [ ( Math.random() - 0.5 ) * vrange * this.anispeed, 
+                    ( Math.random() - 0.5 ) * vrange * this.anispeed];
+        let m   = 1 + Math.random() * mrange;
+
+        // instantiate particle
+        this.particles.push(new Particle(pos, m, vel, 
+                                         this.surface, this.sizerange));
+
+        // attach the DOM element
+        this.svg.appendChild(this.particles[this.particles.length - 1].element);
+    }
+
     draw(dt) {
-        this.birds.map((b) => b.update(dt*this.anispeed));
-        // this.birds.map((b, idx) => {
-        //     if (b.pos[0] > 5 | b.pos[0] < -5 | b.pos[1] > 5 | b.pos[1] < -5) {
-        //         this.svg.removeChild(this.svg.children[idx]);
-        //         this.birds.splice(idx, 1);
-        //     }
-        // })
+        //this.create_position_table();
+        this.update_neighbours();
+        this.particles.map((p) => p.update(dt*this.anispeed));
+    }
+
+    update_neighbours() {
+        this.particles.map((p) => {
+            p.neighbours = this.particles
+        })
+    }
+
+    create_position_table() {
+        this.positions = this.particles.map((p) => p.pos)
     }
 }
 
