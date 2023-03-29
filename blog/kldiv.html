@@ -2711,9 +2711,9 @@ vertical-align: -.125em;
 <pre><code># A tibble: 3 × 6
   expression      min   median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;bch:tm&gt; &lt;bch:tm&gt;     &lt;dbl&gt; &lt;bch:byt&gt;    &lt;dbl&gt;
-1 logdet       12.7µs     15µs    52869.    4.93KB    10.6 
-2 determ         11µs   11.9µs    75637.    4.93KB     7.56
-3 cholesky     14.3µs   15.4µs    57601.   11.98KB    11.5 </code></pre>
+1 logdet       13.1µs   14.2µs    61407.    4.93KB    12.3 
+2 determ       10.9µs   11.7µs    76030.    4.93KB     7.60
+3 cholesky     14.6µs   15.6µs    57334.   11.98KB    11.5 </code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">45</span>)</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>S1000 <span class="ot">&lt;-</span> <span class="fu">rWishart</span>(<span class="dv">1</span>, <span class="dv">1000</span>, <span class="fu">diag</span>(<span class="dv">1000</span>))[,,<span class="dv">1</span>]</span>
@@ -2727,9 +2727,9 @@ vertical-align: -.125em;
 <pre><code># A tibble: 3 × 6
   expression      min   median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;bch:tm&gt; &lt;bch:tm&gt;     &lt;dbl&gt; &lt;bch:byt&gt;    &lt;dbl&gt;
-1 logdet        170ms    170ms      5.87    7.63MB     2.94
-2 determ        173ms    174ms      5.76    7.63MB     2.88
-3 cholesky      141ms    143ms      7.01    7.65MB     2.34</code></pre>
+1 logdet        178ms    184ms      5.43    7.63MB     2.72
+2 determ        171ms    186ms      5.37    7.63MB     2.68
+3 cholesky      138ms    144ms      6.92    7.65MB     2.31</code></pre>
 </div>
 </div>
 <p>Generally, <code>determinant()</code> performs slightly better than <code>log(det())</code>. For low-dimensional distributions, the <code>cholesky</code> version is worst, but it is actually fastest for the 1000-dimensional distribution. This is especially interesting as we may be able to reuse this cholesky decomposition to speed up later steps.</p>
@@ -2749,9 +2749,9 @@ vertical-align: -.125em;
 <pre><code># A tibble: 3 × 6
   expression      min   median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;bch:tm&gt; &lt;bch:tm&gt;     &lt;dbl&gt; &lt;bch:byt&gt;    &lt;dbl&gt;
-1 naive        44.6µs   48.4µs    20036.      21KB     17.1
-2 solve        33.4µs   35.6µs    27232.    11.2KB     13.6
-3 lavaan       33.6µs   36.6µs    25911.    20.6KB     23.3</code></pre>
+1 naive        44.5µs   47.2µs    19589.      21KB     17.1
+2 solve        32.4µs     35µs    26598.    11.2KB     13.3
+3 lavaan       33.9µs   36.2µs    25071.    20.6KB     22.6</code></pre>
 </div>
 </div>
 <p>Here, the naive method is definitely the worst, and the other two methods are almost at the same level. Again, the last identity is especially interesting, because we want to precompute <span class="math inline">\Sigma_q^{-1}</span> anyway for the next part.</p>
@@ -2768,9 +2768,9 @@ vertical-align: -.125em;
 <pre><code># A tibble: 3 × 6
   expression      min   median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;bch:tm&gt; &lt;bch:tm&gt;     &lt;dbl&gt; &lt;bch:byt&gt;    &lt;dbl&gt;
-1 naive        16.8µs   18.4µs    51711.   10.34KB     25.9
-2 solve        23.9µs   26.8µs    35733.      26KB     14.3
-3 lavaan        6.7µs    7.2µs   125721.    9.86KB     25.1</code></pre>
+1 naive        16.8µs     18µs    50526.   10.34KB     20.2
+2 solve        24.1µs   25.8µs    34050.      26KB     13.6
+3 lavaan        7.1µs    7.4µs   116485.    9.86KB     35.0</code></pre>
 </div>
 </div>
 </section>
@@ -2792,9 +2792,9 @@ vertical-align: -.125em;
 <pre><code># A tibble: 3 × 6
   expression      min   median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;bch:tm&gt; &lt;bch:tm&gt;     &lt;dbl&gt; &lt;bch:byt&gt;    &lt;dbl&gt;
-1 naive         4.7µs    5.2µs   175468.      496B      0  
-2 cross         1.6µs    1.8µs   494778.      248B      0  
-3 cross2        1.9µs    2.1µs   426768.      248B     42.7</code></pre>
+1 naive         4.6µs    4.9µs   173750.      496B        0
+2 cross         1.5µs    1.7µs   500959.      248B        0
+3 cross2        1.9µs    2.1µs   441552.      248B        0</code></pre>
 </div>
 </div>
 <p>The second version, using only one <code>crossprod()</code> is the fastest here. It’s actually quite significantly faster than the naïve implementation with standard matrix products.</p>
@@ -2834,8 +2834,8 @@ vertical-align: -.125em;
 <pre><code># A tibble: 2 × 6
   expression      min   median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;bch:tm&gt; &lt;bch:tm&gt;     &lt;dbl&gt; &lt;bch:byt&gt;    &lt;dbl&gt;
-1 base         60.8µs   67.8µs    13744.     100KB     10.6
-2 chol         38.1µs   41.6µs    22071.     103KB     13.3</code></pre>
+1 base         60.7µs     66µs    13807.     100KB     10.4
+2 chol         38.8µs   42.3µs    20974.     103KB     12.6</code></pre>
 </div>
 </div>
 <p>As you can see, the cholesky version is quite a bit (&gt;1/3) faster. But does it also give the correct answer?</p>
@@ -2856,8 +2856,8 @@ vertical-align: -.125em;
 <pre><code># A tibble: 2 × 6
   expression   min median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;dbl&gt;  &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
-1 ours         1      1        14.0      1        2.27
-2 theirs      14.0   14.0       1        5.12     1   </code></pre>
+1 ours         1      1        13.0      1        2.22
+2 theirs      13.8   13.7       1        5.12     1   </code></pre>
 </div>
 </div>
 <p>We’ve achieved quite a dramatic speedup, between 14 and 15x. Additionally, we have allocated 5x less memory. This speedup is maintained for 2-dimensional distributions:</p>
@@ -2879,8 +2879,8 @@ vertical-align: -.125em;
 <pre><code># A tibble: 2 × 6
   expression   min median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;dbl&gt;  &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
-1 ours         1      1        15.2       NaN     1.24
-2 theirs      15.5   15.3       1         NaN     1   </code></pre>
+1 ours         1      1        15.6       NaN     1.28
+2 theirs      16.0   15.8       1         NaN     1   </code></pre>
 </div>
 </div>
 <p>And a positive side-effect of the new function and its memory efficiency is that it also works for larger 250-dimensional distributions, unlike the old function:</p>
@@ -2989,8 +2989,8 @@ vertical-align: -.125em;
 <pre><code># A tibble: 2 × 6
   expression   min median `itr/sec` mem_alloc `gc/sec`
   &lt;bch:expr&gt; &lt;dbl&gt;  &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
-1 ours         1      1        17.2      1        3.78
-2 theirs      17.2   17.4       1        1.42     1   </code></pre>
+1 ours         1      1        16.4      1        2.85
+2 theirs      17.2   16.6       1        1.42     1   </code></pre>
 </div>
 </div>
 </section>
@@ -3005,14 +3005,13 @@ vertical-align: -.125em;
 <span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="co"># kldiv function</span></span>
 <span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">kl_div</span>(μ_p<span class="op">::</span><span class="dt">Vector</span>, μ_q<span class="op">::</span><span class="dt">Vector</span>, Σ_p<span class="op">::</span><span class="dt">AbstractMatrix</span>, Σ_q<span class="op">::</span><span class="dt">AbstractMatrix</span>)</span>
 <span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>    d   <span class="op">=</span> <span class="fu">length</span>(μ_p)</span>
-<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>    Ω_p <span class="op">=</span> <span class="fu">inv</span>(Σ_p)</span>
-<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    Ω_q <span class="op">=</span> <span class="fu">inv</span>(Σ_q)</span>
-<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>    tr  <span class="op">=</span> <span class="fu">sum</span>(Ω_q <span class="op">.*</span> Σ_p)</span>
-<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>    δ   <span class="op">=</span> μ_q <span class="op">.-</span> μ_p</span>
-<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>    qfm <span class="op">=</span> <span class="fu">dot</span>(δ, Ω_q, δ)</span>
-<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (<span class="fu">logdet</span>(Σ_q) <span class="op">-</span> <span class="fu">logdet</span>(Σ_p) <span class="op">-</span> d <span class="op">+</span> tr <span class="op">+</span> qfm) <span class="op">/</span> <span class="fl">2</span></span>
-<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>    Ω_q <span class="op">=</span> <span class="fu">inv</span>(Σ_q)</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    tr  <span class="op">=</span> <span class="fu">sum</span>(Ω_q <span class="op">.*</span> Σ_p)</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>    δ   <span class="op">=</span> μ_q <span class="op">.-</span> μ_p</span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>    qfm <span class="op">=</span> <span class="fu">dot</span>(δ, Ω_q, δ)</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (<span class="fu">logdet</span>(Σ_q) <span class="op">-</span> <span class="fu">logdet</span>(Σ_p) <span class="op">-</span> d <span class="op">+</span> tr <span class="op">+</span> qfm) <span class="op">/</span> <span class="fl">2</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>kl_div (generic function with 1 method)</code></pre>
 </div>
@@ -3035,18 +3034,18 @@ vertical-align: -.125em;
 <div class="sourceCode cell-code" id="cb34"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="pp">@benchmark</span> <span class="fu">kl_div</span>(<span class="op">$</span>mean_0, <span class="op">$</span>mean_1, <span class="op">$</span>S_0, <span class="op">$</span>S_1)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>BenchmarkTools.Trial: 10000 samples with 1 evaluation.
- Range (min … max):  24.500 μs …  2.936 ms  ┊ GC (min … max): 0.00% … 98.29%
- Time  (median):     28.800 μs              ┊ GC (median):    0.00%
- Time  (mean ± σ):   39.219 μs ± 90.442 μs  ┊ GC (mean ± σ):  7.47% ±  3.25%
+ Range (min … max):  17.400 μs …  3.772 ms  ┊ GC (min … max): 0.00% … 95.55%
+ Time  (median):     19.600 μs              ┊ GC (median):    0.00%
+ Time  (mean ± σ):   26.648 μs ± 89.504 μs  ┊ GC (mean ± σ):  8.68% ±  2.60%
 
-  ▃▆██▆▄▂       ▁ ▁▂▃▄▃▂               ▁▂▃▃▂▂                 ▂
-  ███████▇▅▄▃▂▆██████████▇▆▅▅▆▅▅▅▆▆▅▅▅▇███████▇▆▄▄▂▄▄▂▅▅▅▆▆▇▆ █
-  24.5 μs      Histogram: log(frequency) by time      98.9 μs &lt;
+  ▆██▆▄▂▁         ▁▂▂▂▁                ▁▂▃▂▂                  ▂
+  ████████▅▅▃▁▁▁▄▇██████▇▆▆▅▅▅▅▆▄▅▅▁▃▆▄███████▇▆▅▅▄▄▃▅▅▆▇▅▆▆▆ █
+  17.4 μs      Histogram: log(frequency) by time      77.2 μs &lt;
 
- Memory estimate: 51.81 KiB, allocs estimate: 14.</code></pre>
+ Memory estimate: 33.88 KiB, allocs estimate: 10.</code></pre>
 </div>
 </div>
-<p>The <code>Julia</code> function is even faster than the optimized <code>R</code> function, completing in less than 30 microseconds (median), whereas the median of the <code>R</code> Cholesky version (<a href="#sec-optimized">Section 6</a>) is around 40 microseconds.</p>
+<p>The <code>Julia</code> function is even faster than the optimized <code>R</code> function, completing in less than 20 microseconds (median), whereas the median of the <code>R</code> Cholesky version (<a href="#sec-optimized">Section 6</a>) is around 40 microseconds.</p>
 </section>
 
 </main>

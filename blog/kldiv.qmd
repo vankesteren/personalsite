@@ -336,7 +336,6 @@ using BenchmarkTools
 # kldiv function
 function kl_div(μ_p::Vector, μ_q::Vector, Σ_p::AbstractMatrix, Σ_q::AbstractMatrix)
     d   = length(μ_p)
-    Ω_p = inv(Σ_p)
     Ω_q = inv(Σ_q)
     tr  = sum(Ω_q .* Σ_p)
     δ   = μ_q .- μ_p
@@ -363,4 +362,4 @@ Now, let's benchmark this function:
 @benchmark kl_div($mean_0, $mean_1, $S_0, $S_1)
 ```
 
-The `Julia` function is even faster than the optimized `R` function, completing in less than 30 microseconds (median), whereas the median of the `R` Cholesky version (@sec-optimized) is around 40 microseconds.
+The `Julia` function is even faster than the optimized `R` function, completing in less than 20 microseconds (median), whereas the median of the `R` Cholesky version (@sec-optimized) is around 40 microseconds.
