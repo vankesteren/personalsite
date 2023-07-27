@@ -1,0 +1,299 @@
+---
+title: "Why would you do regression with multivariate outcome $Y$?"
+author: "Erik-Jan van Kesteren"
+format: 
+  html:
+    toc: true
+    self-contained: true
+    self-contained-math: true
+    html-math-method: katex
+---
+
+A question that's been bothering me for a while is the following: if you have $Q$ outcome variables in a matrix, say $Y \in \mathbb{R}^{N\times Q}$, and you want to regress them on a common set of $P$ predictors, say $X \in \mathbb{R}^{N\times P}$, what is the advantage of doing this in one model $Y = XB + E$ as opposed to $Q$ separate models? My intuition is that if the outcome variables in $Y$ (or rather the errors $E$) are correlated, this will lead to smaller standard errors for the parameters.
+
+Let's see if we can confirm or deny this intuition with a small simulation.
+
+## Generating data
+
+First, we create a function to generate some data following the above pattern. There are a few specific parameters in this function, the most important are `varprop` (the proportion of variance in Y explained by X) and the various `rho` parameters (which tune the correlations of `B`, `X` and `Y`). 
+
+::: {.callout-note}
+Code blocks which are not the most relevant for following the content are collapsed. Click the "code" button to show the code for those sections.
+:::
+
+```{r}
+#| label: datasim
+#| code-fold: true
+
+#' Function for simulating multivariate regression data
+#' 
+#' @param N the number of observations
+#' @param P the number of predictors
+#' @param Q the number of outcome variables
+#' @param varprop the proportion of variance explained in each outcome
+#' @param rho_X the correlation between the predictors
+#' @param rho_B the correlation between the parameters
+#' @param rho_E the correlation between the errors
+#' @param exact whether the error covariance should be imposed exactly (TRUE)
+#' 
+#' @return list with Y, X
+sim_dat <- function(N = 100, P = 5, Q = 2, varprop = 0.5, rho_X = 0, rho_B = 0, rho_E = 0, exact = TRUE) {
+  # Create X matrix
+  X <- matrix(rnorm(N*P), N)
+  RX <- matrix(rho_X, P, P)
+  diag(RX) <- 1
+  CRX <- chol(RX)
+  X <- if (exact) X %*% solve(chol(var(X)), CRX) else X %*% CRX
+  
+  # Create B matrix
+  B <- matrix(rnorm(P*Q), P)
+  RB <- matrix(rho_B, Q, Q)
+  diag(RB) <- 1
+  CRB <- chol(RB)
+  B <- if (exact) B %*% solve(chol(var(B)), CRB) else B %*% CRB
+  
+  # Create E matrix
+  E <- matrix(rnorm(N*Q), N)
+  XB <- X %*% B
+  vXB <- diag(var(XB))
+  sE <- sqrt(vXB*varprop/(1-varprop))
+  RE <- matrix(rho_E, Q, Q)
+  diag(RE) <- 1
+  CVE <- chol(RE) %*% diag(sE)
+  E <- if (exact) E %*% solve(chol(var(E)), CVE) else E %*% CVE
+  
+  # Create Y matrix
+  Y <- XB + E
+  
+  return(list(Y = Y, X = X, B = B, E = E))
+}
+``` 
+
+The function returns a list with all the generated matrices and can be used as follows:
+
+```{r}
+#| label: sim
+#| eval: false
+dat <- sim_dat(
+  N = 100, P = 5, Q = 2, varprop = 0.5,
+  rho_X = 0, rho_B = 0, rho_E = 0, exact = TRUE
+)
+
+dat$X
+dat$Y
+```
+
+## Separate vs. joint model
+
+First, let's estimate the separate regressions and the multivariate one when the errors are uncorrelated and compare the standard errors
+```{r}
+#| label: compare_nocor
+# set seed and generate data
+set.seed(45)
+d_nocor <- sim_dat()
+
+# fit separate regressions
+fit_sep_nocor_1 <- lm(Y[,1] ~ X + 0, data = d_nocor)
+fit_sep_nocor_2 <- lm(Y[,2] ~ X + 0, data = d_nocor)
+
+# fit multivariate regression
+fit_joint_nocor <- lm(Y ~ X + 0, data = d_nocor)
+```
+::: {.panel-tabset}
+## Estimates of separate regressions
+```{r}
+#| label: nocor1
+#| code-fold: true
+#| results: hold
+# extract coef & s.e.
+cat("Separate models:\n")
+rbind(
+  summary(fit_sep_nocor_1)$coefficients[,1:2], 
+  summary(fit_sep_nocor_2)$coefficients[,1:2]
+)
+```
+
+## Estimates of joint regression
+```{r}
+#| label: nocor2
+#| code-fold: true
+#| results: hold
+# extract coef & s.e.
+cat("Joint model:\n")
+rbind(
+  summary(fit_joint_nocor)[[1]]$coefficients[,1:2],
+  summary(fit_joint_nocor)[[2]]$coefficients[,1:2]
+)
+```
+:::
+In this case, it does not matter at all whether you perform two separate regressions or whether you perform the regressions together. 
+
+## Correlated errors
+
+Now, let's do the same thing but with residual correlations of 0.4:
+
+```{r}
+#| label: compare_corE
+
+# set seed and generate data
+set.seed(45)
+d_cor_E <- sim_dat(rho_E = 0.4)
+
+# fit separate regressions
+fit_sep_cor_1 <- lm(Y[,1] ~ X + 0, data = d_cor_E)
+fit_sep_cor_2 <- lm(Y[,2] ~ X + 0, data = d_cor_E)
+
+# fit multivariate regression
+fit_joint_cor <- lm(Y ~ X + 0, data = d_cor_E)
+```
+
+::: {.panel-tabset}
+## Estimates of separate regressions
+```{r}
+#| label: cor1
+#| code-fold: true
+#| results: hold
+# extract coef & s.e.
+cat("Separate models:\n")
+rbind(
+  summary(fit_sep_cor_1)$coefficients[,1:2], 
+  summary(fit_sep_cor_2)$coefficients[,1:2]
+)
+```
+
+## Estimates of joint regression
+```{r}
+#| label: cor2
+#| code-fold: true
+#| results: hold
+# extract coef & s.e.
+cat("Joint model:\n")
+rbind(
+  summary(fit_joint_cor)[[1]]$coefficients[,1:2],
+  summary(fit_joint_cor)[[2]]$coefficients[,1:2]
+)
+```
+:::
+
+Even in this case, there is no difference between the two!
+
+
+::: {.callout-note}
+This is really counterintuitive to me! Can't we "borrow information" somehow in the joint model? Surely there are differences in the asymptotic covariance matrix of $B$?
+:::
+
+Let's inspect asymptotic covariance matrix (ACOV) of the separate regressions, which is block-diagonal, whereas the ACOV of the joint model is not:
+
+```{r}
+#| label: computeacov
+#| code-fold: true
+#| warning: false
+#| message: false
+library(Matrix)
+
+ACOV_joint <- vcov(fit_joint_cor)
+ACOV_sep <- as.matrix(bdiag(vcov(fit_sep_cor_1), vcov(fit_sep_cor_2)))
+rownames(ACOV_sep) <- 
+  colnames(ACOV_sep) <- 
+  rownames(ACOV_joint) <- 
+  colnames(ACOV_joint) <- 
+  c(outer(paste0("Y", 1:2), paste0("X", 1:5), paste, sep = "<-"))
+```
+
+::: {.panel-tabset}
+## ACOV of separate regressions
+```{r}
+#| label: acov1
+#| echo: false
+
+round(ACOV_sep, 3)
+```
+## ACOV of joint regression
+```{r}
+#| label: acov2
+#| echo: false
+round(ACOV_joint, 3)
+```
+:::
+
+So indeed, there is a difference in the asymptotic covariance matrices of the parameters in the separate and joint case, but this does not make a difference for the standard errors.
+
+## Another option?
+
+Maybe inducing correlations in some the other data matrices makes a difference? Let's check:
+```{r}
+#| label: compare_corB
+# set seed and generate data
+set.seed(45)
+d_cor_all <- sim_dat(rho_B = 0.4, rho_E = 0.4, rho_X = 0.4)
+
+# fit separate regressions
+fit_sep_cor_1 <- lm(Y[,1] ~ X + 0, data = d_cor_all)
+fit_sep_cor_2 <- lm(Y[,2] ~ X + 0, data = d_cor_all)
+
+# fit multivariate regression
+fit_joint_cor <- lm(Y ~ X + 0, data = d_cor_all)
+
+```
+
+
+::: {.panel-tabset}
+## Estimates of separate regressions
+```{r}
+#| label: corb1
+#| code-fold: true
+#| results: hold
+# extract coef & s.e.
+cat("Separate models:\n")
+rbind(
+  summary(fit_sep_cor_1)$coefficients[,1:2], 
+  summary(fit_sep_cor_2)$coefficients[,1:2]
+)
+
+```
+
+## Estimates of joint regression
+```{r}
+#| label: corb2
+#| code-fold: true
+#| results: hold
+# extract coef & s.e.
+cat("Joint model:\n")
+rbind(
+  summary(fit_joint_cor)[[1]]$coefficients[,1:2],
+  summary(fit_joint_cor)[[2]]$coefficients[,1:2]
+)
+```
+:::
+
+Also no difference!
+
+
+## Seemingly unrelated regressions
+
+There is another way of analysing this data, and it goes like so: stack the $Y$ variables on top of each other, and create a block diagonal matrix for $X$. Then, allow for cross-correlations between the residuals. See [the SUR wiki page](https://en.wikipedia.org/wiki/Seemingly_unrelated_regressions). 
+
+::: {.callout-note}
+SUR is actually meant to deal with varying predictors for the different equations, so this is not exactly the intended use-case! In the case of different predictors for each of the equations, there would be a difference between SUR and OLS ([see here](https://en.wikipedia.org/wiki/Seemingly_unrelated_regressions#Equivalence_to_OLS))
+:::
+
+```{r}
+#| label: SUR
+#| message: false
+#| warning: false
+
+library(systemfit)
+eq_list <- list(
+  Y1 = Y[,1] ~ X + 0,
+  Y2 = Y[,2] ~ X + 0
+)
+summary(systemfit(eq_list, method = "SUR", data = d_cor_all))
+```
+
+As we can see, this again gives exactly the same parameter estimates and standard errors.
+
+## Conclusion
+
+So why would you do regression with multivariate outcome $Y$? If you have the same set of predictors for each outcome, you wouldn't. Just do separate regressions and call it a day! Also: intuitions are not always correct 🙂
+
+
