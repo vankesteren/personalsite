@@ -1,0 +1,235 @@
+---
+title: "The infeasibility of synthetic controls with many donors"
+author: "Erik-Jan van Kesteren"
+format: 
+  html:
+    self-contained: true
+    self-contained-math: true
+---
+
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+library(furrr)
+plan("multisession", workers = 10)
+```
+
+The synthetic control method has been mostly used with relatively few donor pool units (on the order of tens of units). 
+
+::: {.callout-tip}
+## Research question
+What happens to the estimation error of donor weights if we have thousands of donor pool units?
+:::
+
+Recall that the [synthetic control method](https://www.aeaweb.org/articles?id=10.1257/jel.20191450) has variable weights $v$ and donor weights $w$. In this document, I fix the variable weights -- the optimization becomes much more complex if we estimate those as well, see [here](http://congress-files.s3.amazonaws.com/2022-07/Synthetic%2520Control%2520Methods.pdf). I focus on how well the donor weights are estimated by performing the synthetic control method.
+
+Below is code to generate some basic data in the structure of the synthetic control problem:
+
+- $X0$ is the $N_\text{covariates}$ by $N_\text{donors}$ matrix of donor covariate values
+- $X1$ is the $N_\text{covariates}$ by 1 vector of treated unit covariate values
+- True weights $w$ are such that the first three values are .2, .35, and .45,  and the remaining weights are 0.
+
+
+```{r}
+#| label: datagen
+#| code-fold: true
+#| code-summary: "Code (click to show)"
+# function to generate some random data
+gen_data <- function(N_covariates = 10, N_donors = 20, ressd = 0) {
+  w <- c(.2, .35, .45, rep(0, N_donors-3)) 
+  v <- runif(N_covariates)
+  X0 <- matrix(rnorm(N_donors*N_covariates), N_covariates)
+  X1 <- diag(1/v)%*%(diag(v)%*%X0%*%w + rnorm(N_covariates, sd = ressd))
+  return(list(X0 = X0, X1 = X1, w = w, v = v))
+}
+```
+
+
+Internally, the Synth package in R uses the following [quadratic program](https://en.wikipedia.org/wiki/Quadratic_programming) to perform constrained optimization for the weights:
+```{r}
+#| label: synth_sc
+#| code-fold: true
+# estimate the synth way. Code adapted from Synth::synth
+sc_synth <- function(X0, X1, v) {
+  V <- diag(v)
+  H <- t(X0) %*% V %*% (X0)
+  a <- X1
+  c <- -1 * c(t(a) %*% V %*% X0)
+  A <- t(rep(1, length(c)))
+  b <- 1
+  l <- rep(0, length(c))
+  u <- rep(1, length(c))
+  r <- 0
+  res <- kernlab::ipop(
+    c = c,
+    H = H,
+    A = A,
+    b = b,
+    l = l,
+    u = u,
+    r = r,
+    maxiter = 1000,
+    sigf = 5,
+    margin = 5e-4,
+    bound = 10
+  )
+  return(kernlab::primal(res))
+}
+```
+
+However, the quadratic program routine `kernlab::ipop()` is pretty slow especially as the number of donors grows, so let's implement this more efficient version: 
+
+```{r}
+#| label: osqp_sc
+#| code-fold: true
+# estimate with osqp, much faster!
+sc_osqp <- function(X0, X1, v, polish = TRUE) {
+  N_donors <- ncol(X0)
+  X0v <- X0*v
+  # stop annoying printing with capture.output.
+  o <- capture.output({ 
+    solver <- osqp::osqp(
+      P = crossprod(X0, X0v),
+      q = -crossprod(X1, X0v),
+      A = rbind(rep(1, N_donors), diag(N_donors)),
+      l = c(1, rep(0, N_donors)),
+      u = rep(1, N_donors + 1),
+      pars = osqp::osqpSettings(polish = polish)
+    )
+    result <- solver$Solve()
+  })
+  return(result$x)
+}
+```
+
+Let's quickly check that they do the same thing:
+
+```{r}
+#| label: check
+set.seed(45)
+dat <- gen_data(5, 10)
+w_synth <- sc_synth(dat$X0, dat$X1, dat$v)
+w_osqp  <- sc_osqp(dat$X0, dat$X1, dat$v)
+round(cbind(w_synth, w_osqp), 4)
+```
+Now, let's see how much faster our implementation is:
+
+```{r}
+#| label: benchmark
+bench::mark(
+  synth = sc_synth(dat$X0, dat$X1, dat$v),
+  osqp  = sc_osqp(dat$X0, dat$X1, dat$v),
+  check = FALSE, relative = TRUE
+)
+```
+
+We can see that for this problem, the `osqp` implementation is faster and we use less memory. This advantage only grows with larger datasets (I've seen 16x speed improvements!)
+
+:::{.callout-warning}
+## Quadratic programming
+
+A QP solver like the one above is only guaranteed to reach a global optimum if the Q matrix (or H matrix) is positive-definite / full rank. In our case, the rank is at most `N_covariates` while the matrix is of size `N_donors` by `N_donors`. This problem thus only has a global solution if the number of covariates is larger than the number of donors.
+
+However, if the constraints (`w` needs to sum to 1 and be between 0 and 1) are adequate, a good solution can still be found, so the story is a bit more complex.
+:::
+
+# Estimation problems
+
+Let's see how well the synthetic control method works when we have 7 covariates and 50 donor units (a quite reasonable situation!):
+```{r}
+#| label: sim
+#| code-fold: true
+res <- future_map(
+  .x = 1:1000, 
+  .f = function(i) {
+    d <- gen_data(7, 50)
+    sc_osqp(d$X0, d$X1, d$v)
+  }, 
+  .options = furrr_options(seed = TRUE)
+)
+res <- Reduce(rbind, res)
+
+boxplot(res[,1:3], xlab = "w", ylab = "value")
+points(x = c(1, 2, 3), y = c(.2, .35, .45), pch = 23, cex = 1.4, bg = "red")
+```
+Surprisingly, this method quite severely underestimates the true values (red diamonds). Let's investigate further:
+
+```{r}
+#| label: densities
+#| code-fold: true
+plot(density(res[,1], from = 0, to = 1), 
+     main = "Sampling distribution of w[1]")
+abline(v = 0.2, col = "red")
+
+plot(density(res[,2], from = 0, to = 1), 
+     main = "Sampling distribution of w[2]")
+abline(v = 0.35, col = "red")
+
+plot(density(res[,3], from = 0, to = 1), 
+     main = "Sampling distribution of w[3]")
+abline(v = 0.45, col = "red")
+
+```
+While the synthetic control method often gets it right, it also very often gets it wrong and gives these first three true donor pool units a weight near 0. 
+
+::: {.callout-note}
+Note that this is even without any added noise, so we assume that the covariates of the treated unit can be perfectly predicted by the linear combination of the donor pool units!
+:::
+
+
+# Let's go further
+
+Let's see how this bias changes as a function of the number of covariates we enter into the model. We set the number of donors to 100 and change the number of covariates. We do this 1000 times for each covariate setting, and we average to get an estimate of the expected value of `w`
+
+```{r}
+#| label: hidim-syn
+#| code-fold: true
+#| cache: true
+res <- future_map(
+  .x = 2:50, 
+  .f = function(x) {
+    res <- numeric(100)
+    for (i in 1:1000) {
+      d <- gen_data(x, 100)
+      res <- res + sc_osqp(d$X0, d$X1, d$v, 6.5)
+    }
+    res / 1000
+  }, 
+  .progress = TRUE, 
+  .options = furrr_options(seed = TRUE)
+)
+res <- Reduce(rbind, res)
+
+plot(2:50, res[,1], col = "blue", type = "l", 
+     ylim = c(0, 0.5), xlab = "Number of covariates",
+     ylab = "weight", main = "Effect of increasing covariates on bias of weight")
+abline(h = .2, col = "blue", lty = 2)
+lines(2:50, res[,2], col = "darkgreen")
+abline(h = .35, col = "darkgreen", lty = 2)
+lines(2:50, res[,3], col = "darkorange")
+abline(h = .45, col = "darkorange", lty = 2)
+```
+
+In my preliminary testing, the bias seems to become acceptable around N_covariates = sqrt(N_donors) + 10%. That means, for 3000 donors, we'd need about `r round(sqrt(3000) * 1.1)` covariates just to estimate the weights correctly!
+
+Let's check (warning: this takes quite some time even with the faster algo):
+
+```{r}
+#| label: sim3000
+#| code-fold: true
+#| cache: true
+res <- future_map(
+  .x = 1:10, 
+  .f = function(i) {
+    d <- gen_data(60, 3000)
+    sc_osqp(d$X0, d$X1, d$v, FALSE)
+  }, 
+  .progress = TRUE,
+  .options = furrr_options(seed = TRUE)
+)
+res <- Reduce(rbind, res)
+
+boxplot(res[,1:3], xlab = "w", ylab = "value")
+points(x = c(1, 2, 3), y = c(.2, .35, .45), pch = 23, cex = 1.4, bg = "red")
+```
