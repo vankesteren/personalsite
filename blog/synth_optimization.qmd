@@ -4,7 +4,6 @@ author: "Erik-Jan van Kesteren"
 format: 
   html:
     self-contained: true
-    self-contained-math: true
 ---
 
 ```{r}

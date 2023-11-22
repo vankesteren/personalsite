@@ -1,0 +1,283 @@
+---
+title: "On the sparsity of the SCM convex hull constraint"
+author: "Erik-Jan van Kesteren"
+format: 
+  html:
+    self-contained: true
+---
+
+The convex hull constraint in synthetic controls is said to produce sparse solutions for the weights. In this document, I show under which conditions this is the case (and when not!).
+
+# Weight estimation as high-dimensional regression
+
+First, let's generate some toy data:
+
+```{r}
+#| label: data
+
+
+# data
+X1 <- matrix(c(2, 1))
+X0 <- matrix(
+  c(1, 1.3, 
+    0.5, 1.8, 
+    1.1, 2.4, 
+    1.8, 1.8, 
+    1.3, 1.8), 2)
+
+# here are the donor data points
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Covariate values of treated and donor units"
+)
+
+# and as a triangle the treated unit
+points(t(X1), pch = 2)
+```
+
+Note that in this data, following the SCM setup, the rows are variables and the columns are units. The goal is to find weights so we approximate the treated unit as well as possible with a weighted combination of the donor units. Without any extra fluff, this leads to linear regression.
+
+```{r}
+#| label: lm
+ols_fit <- lm(X1 ~ X0 + 0)
+
+# print weights
+coef(ols_fit)
+```
+
+This is a high-dimensional regression problem (hence the NA values), where it is known that you can get perfect predictions guaranteed. Let's look at the prediction:
+
+```{r}
+#| label: perfect prediction
+# og plot
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Covariate values of treated and donor units"
+)
+points(t(X1), pch = 2)
+
+# add prediction
+points(t(predict(ols_fit)), pch = 3)
+```
+We can even get this perfect prediction with any two random points:
+
+```{r}
+#| label: perf-pred-random
+# even if we pick two random points (!!)
+ols_fit_2 <- lm(X1 ~ X0[,sample(5, 2)] + 0)
+
+# og plot
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Covariate values of treated and donor units"
+)
+points(t(X1), pch = 2)
+points(t(predict(ols_fit)), pch = 4)
+```
+
+The problem with this is that while the weights are sparse (only the first two weights will be non-NA), they are still uninterpretable, because the choice of order of the donor pool trivially changes the weights (and those new weights are just as "good" as the first weights!)
+
+# The convex hull constraint
+This is why an additional constraint is introduced in SCM on the weights, namely:
+
+- the value of each weight has to be between 0 and 1
+- the sum of the weights has to be 1
+
+Geometrically, this means that the solutions of the weight estimation are constrained to be within the __convex hull__ of the donor pool points:
+
+```{r}
+#| label: chull
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Convex hull of the donor units"
+)
+points(t(X1), pch = 2)
+segments(
+  x0 = X0[1,1:4], y0 = X0[2,1:4], 
+  x1 = X0[1,c(2, 3, 4, 1)], y1 = X0[2,c(2, 3, 4, 1)]
+)
+```
+
+So now, in order to estimate the weights, we need to perform constrained regression. This amounts to a quadratic optimization routine, as follows: 
+```{r}
+#| label: quadopt
+lm_constrained <- function(X1, X0) {
+  N_donors <- ncol(X0)
+  # stop annoying printing with capture.output.
+  o <- capture.output({ 
+    solver <- osqp::osqp(
+      P = crossprod(X0, X0),
+      q = -crossprod(X1, X0),
+      A = rbind(rep(1, N_donors), diag(N_donors)),
+      l = c(1, rep(0, N_donors)),
+      u = rep(1, N_donors + 1),
+      pars = osqp::osqpSettings(polish = TRUE)
+    )
+    result <- solver$Solve()
+  })
+  return(result$x)
+}
+```
+
+Let's see what happens when we estimate the weights using this constrained linear model!
+
+```{r}
+#| label: constrained weights
+# estimate w
+w_hat <- lm_constrained(X1, X0)
+
+# let's see what happens with the estimated weights
+round(w_hat, 2)
+```
+Only two nonzero weights! We can explain this as follows: performing constrained regression (with euclidean distance) is equal to perpendicular projection of our treated unit on one of the faces of the convex hull. The face of the hull is determined by its vertices: two points in two dimensions.
+
+In general, for D dimensions there will be D nonzero weights because the face of a convex hull in D dimensions is the D-1-dimensional simplex, which is defined by D vertices (triangles in 3 dimensions, tetrahedrons in 4 dimensions, etc.)
+
+```{r}
+#| label: projection
+
+# plot convex hull again
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Convex hull of the donor units"
+)
+points(t(X1), pch = 2)
+segments(
+  x0 = X0[1,1:4], y0 = X0[2,1:4], 
+  x1 = X0[1,c(2, 3, 4, 1)], y1 = X0[2,c(2, 3, 4, 1)]
+)
+
+# weights represent the perpendicular projection of the treated unit onto the face:
+X1_hat <- X0 %*% w_hat 
+points(t(X1_hat), pch = 6)
+segments(X1[1,], X1[2,], X1_hat[1,], X1_hat[2,], lty = 2)
+```
+
+So in this case there is only one optimal solution, and we get nice interpretable weights (but an imperfect fit!).
+
+Note also that we can already discard the X0 point within the convex hull before the weights estimation because its weight is never going to be nonzero.
+
+However, we may not be in this situation where X1 is outside the convex hull and we need to project it onto a face. For this to happen, X1 needs to be a multivariate outlier. The probability of this happening decreases when we increase the number of donors. Let's investigate roughly how likely this is for 2 and 5 covariates, in a small monte carlo simulation with increasing numbers of donors:
+
+```{r}
+#| label: sim
+#| cache: true
+#| code-fold: true
+#| warning: false
+#| message: false
+library(geometry)
+library(furrr)
+plan("multisession", workers = 10)
+
+point_in_hull <- function(n_dims = 2, n_donors = 5) {
+  X_hull <- matrix(rnorm(n_dims*n_donors), n_donors)
+  hull <- convhulln(X_hull)
+  return(inhulln(hull, t(rnorm(n_dims))))
+}
+
+n_donors <- round(exp(seq(1, 6, len = 20)))
+prob_in_hull <- future_map_dbl(
+  .x = n_donors, 
+  .f = \(nd) mean(sapply(1:1000, \(i) point_in_hull(n_donors = nd))), 
+  .progress = TRUE, 
+  .options = furrr_options(seed = TRUE)
+)
+
+plot(
+  x = n_donors, 
+  y = prob_in_hull, 
+  ylab = "Probability of being in convex hull", 
+  xlab = "Number of donors", 
+  main = "Probability of being in convex hull as a function of num donors",
+  ylim = c(0, 1), 
+  log = "x", type = "l"
+)
+
+# and with 5 dimensions:
+prob_in_hull_5 <- future_map_dbl(
+  .x = n_donors[4:20], 
+  .f = \(nd) mean(sapply(1:1000, \(i) point_in_hull(5, n_donors = nd))), 
+  .progress = TRUE, 
+  .options = furrr_options(seed = TRUE)
+)
+
+lines(n_donors[4:20], prob_in_hull_5, lty = 2)
+legend("topleft", lty = c(1, 2), legend = c("2 covariates", "5 covariates"))
+```
+From this figure, it can be seen that increasing the number of donors increases the likelihood of being in the convex hull. For our designed case, it's already more likely than not with about 11 donor units when we have 2 covariates. With more covariates, you need more donors to reach this point, around 150-200.
+
+# What happens in the hull?
+
+So what happens to our weights if the treated unit is indeed within the convex hull of the donor units, which is likely if you have many donors? In short, the convex hull constraint alone is now not enough to uniquely identify the weights and to make them sparse / interpretable. We get the same indeterminacy problems as before, in this case also with non-sparse weights.
+
+```{r}
+#| label: withinhull
+
+# new treated unit
+X1_alt <- matrix(c(0.9, 1.7))
+
+# og plot
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Covariate values of treated and donor units"
+)
+points(t(X1_alt), pch = 2)
+
+# non-sparse weights
+w_alt <- lm_constrained(X1_alt, X0)
+round(w_alt, 2)
+
+# perfect prediction
+X1_alt_hat <- X0 %*% w_alt
+points(t(X1_alt_hat), pch = 3)
+
+```
+
+Again, if we pick a few donor units, which is equivalent to setting the weights of the other donor units to 0, we can still achieve perfect prediction as long as the treated unit is within the new convex hull.
+
+```{r}
+#| label: withinhullsub
+
+# og plot
+plot(
+  t(X0), asp = 1, 
+  xlim = c(0, 3),
+  ylim = c(0, 3),
+  xlab = "covariate 1",
+  ylab = "covariate 2",
+  main = "Covariate values of treated and donor units"
+)
+points(t(X1_alt), pch = 2)
+
+# still perfect prediction with only the first three units!
+id <- c(1, 2, 3)
+w_alt_3 <- lm_constrained(X1_alt, X0[,id])
+X1_alt_hat_3 <- X0[,id] %*% w_alt_3
+points(t(X1_alt_hat), pch = 4)
+```
+
+In conclusion, within the hull the weights are (a) not sparse (i.e., not easy to interpret), and (b) indeterminate because a different set of weights can lead to the exact same solution.
