@@ -51,6 +51,7 @@ a:hover {
 
 .portrait {
     width: 10rem;
+    min-height: 10rem;
     border-radius: 3%;
 }
 
