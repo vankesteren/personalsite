@@ -1,0 +1,281 @@
+---
+title: "Smoothing disease mentions"
+author: "Erik-Jan van Kesteren"
+format: 
+  html:
+    self-contained: true
+    self-contained-math: true
+---
+
+```{r}
+#| label: setup
+#| echo: false
+#| include: false
+
+library(tidyverse)
+library(sf)
+library(duckdb)
+library(lme4)
+```
+
+## Introduction
+
+Based on [Delpher data](https://www.delpher.nl/), we have created a big [database of disease mentions](https://github.com/sodascience/disease_database) for different diseases. Here, we show how to create a model for the disease mention probability that takes into account spatial and temporal smoothness. This model can be used to smooth the probability estimates, fill in missing values, and correct for uncertainty.
+
+The goal of this is to create a more reliable estimate (in the sense of mean squared error to the "true" disease incidence) of relative disease pressure in different locations for different timepoints. This should improve downstream analyses accounting for such disease pressure. For example, in the raw data there are a lot of location-timepoint combinations where there is only a single newspaper article which does mention the disease. The naïve estimate of disease pressure there is then 100%, but there is actually a lot of uncertainty around this estimate.
+
+Note that this procedure has not yet been validated with external indicators of disease incidence, such as historical timeseries in specific cities. This remains to be done.
+
+## Data loading
+
+First, we load the raw data using `duckdb` and create two subsets containing only cholera mentions: one for the years 1864-1868, and one with all years.
+
+```{r}
+#| label: diseasedata
+#| 
+drv <- duckdb()
+con <- dbConnect(drv)
+db  <- 
+  tbl(con,"read_parquet('disease_database/**/*.parquet', hive_partitioning = true)")
+
+cholera_full <- 
+  db |> 
+  filter(disease == "cholera") |> 
+  select(year, month, cbscode, n_location, n_both) |> 
+  collect() 
+
+duckdb_shutdown(drv)
+
+
+# Now, we want to "complete" the data, meaning adding year-month-cbscode rows that do not exist
+# and recompute some variables we will use later
+cholera_df <- expand_grid(
+    year = min(cholera_full$year):max(cholera_full$year),
+    month = 1:12,
+    cbscode = unique(cholera_full$cbscode)
+  ) |> 
+  arrange(year, month, cbscode) |>
+  left_join(cholera_full, by = join_by(year, month, cbscode)) |>
+  mutate(
+    normalized_mentions = n_both / n_location,
+    date = ym(paste(year, month, sep = "-")),
+    month_number = (year - min(year)) * 12 + month
+  )
+
+cholera_sub <- cholera_df |> filter(year < 1869, year > 1863)
+glimpse(cholera_sub)
+```
+Additionally, we load the map polygon data from the excellent [nlgis](https://nlgis.nl) resource:
+
+```{r}
+#| label: mapdata
+map <- st_read("https://nlgis.nl/api/maps?year=1869", crs = "EPSG:4326")
+```
+
+Then, we can create a quick map of disease pressure in July 1866:
+
+```{r}
+#| label: plot
+#| cache: true
+
+scale_fill_disease <- scale_fill_gradient(
+  na.value = "#ffffcc",
+  low = "#f7fbff",
+  high = "#08306b",
+  transform = scales::transform_pseudo_log(sigma = .2)
+)
+
+cholera_sub |> 
+  filter(year == 1866, month == 7) |> 
+  left_join(map, by = join_by(cbscode)) |> 
+  st_as_sf() |> 
+  ggplot(aes(fill = normalized_mentions)) +
+  geom_sf(color = "transparent", size = 0.3) + 
+  scale_fill_disease +
+  theme_minimal() +
+  labs(
+    title = "Cholera mentions in July 1866 in the Netherlands",
+    subtitle = "Raw newspaper mentions, normalized by location mentions",
+    fill = "Normalized mentions"
+  )
+```
+
+Note that this map contains quite some missingness in locations for which no newspaper articles were found at all. 
+
+In addition, we can look at the change in mentions over time for a few locations:
+
+```{r}
+#| label: timeplot
+#| cache: true
+#| warning: false
+
+cholera_sub |> 
+  ggplot(aes(y = normalized_mentions, x = date, group = cbscode)) +
+  geom_line(alpha = 0.05) +
+  theme_minimal() +
+  scale_x_date(date_breaks = "year", labels = year) +
+  labs(
+    title = "Cholera mentions in 1860s in the Netherlands",
+    subtitle = "Each line indicates one municipality",
+    x = ""
+  )
+```
+
+From this, if you squint can see that in the summer of 1866 and to a lesser degree 1867 there is a spike in disease mentions, indicating high incidence. However, there is considerable uncertainty and discontinuity in the individual lines.
+
+## The smoothing model
+
+To compute the disease mention probability, we currently use _normalized mentions_:  divide the number of articles mentioning both our disease of interest and a specific location (`n_both`, or $n$) by the number of articles that mention only the location (`n_location`, or $N$). As mentioned before, this yields non-smooth estimates, and it is hard to distinguish 1 / 2 from 100 / 200 in terms of its uncertainty.
+
+Instead, we can create a formal model for the disease mention probability in each region at each timepoint $\pi_{it}$. Then, we can express the likelihood as follows:
+
+$p(n_it | N_it) = Binom(\pi_{it}) = {N \choose n} \pi^n(1-\pi)^{N-n}$
+
+With a logit link function, we can create a binomial generalized linear model (GLM): 
+
+$\pi = \frac{1}{1 + e^{-\eta}}$
+
+for some linear predictor $\eta$.
+
+The simplest such model for our data, with year-month-location fixed effects, would be as follows:
+
+$\pi_{it} = \alpha + \beta_{it}$
+
+This would already take into account the uncertainty problem. However, this means estimating one parameter per row of our dataset (54720). This is not feasible with reasonable laptops. Additionally, we not only want to take into account uncertainty, but also smoothing over time and space. Thus, in the next two sections I develop the space-time smoothing model.
+
+### Smoothing over time
+
+To smooth over time, we can set up a smoothing spline:
+
+$\pi_{it} = \alpha + f(t)$
+
+where $f(t)$ is a natural spline. In `R`, we can do this as follows:
+
+```{r}
+#| label: spline
+
+library(mgcv)
+
+fit_spline <- gam(
+  normalized_mentions ~ s(month_number),
+  family = binomial(),
+  weights = n_location,
+  data = cholera_sub
+)
+```
+
+To visualise this, we can predict the probability for each observation in our dataset.
+
+```{r}
+cholera_sub |> 
+  mutate(prob = predict(fit_spline, newdata = cholera_sub, type = "response")) |> 
+  ggplot(aes(y = prob, x = date, group = cbscode)) +
+  geom_line(alpha = 0.05) +
+  theme_minimal() +
+  scale_x_date(date_breaks = "year", labels = year) +
+  labs(
+    title = "Cholera mentions in 1860s in the Netherlands",
+    subtitle = "Each line indicates one municipality",
+    x = ""
+  )
+```
+
+That looks good! But this is predicting for each region the same probability, we still need to make this smooth different for each region. This, we can do using the magic of mixed models!
+
+### Smoothing over space
+
+The most basic smoother over space for a single month would be to introduce a location random effect:"
+
+```{r}
+#| label: randef
+
+library(lme4)
+
+control <- glmerControl(calc.derivs = FALSE, optimizer = "nloptwrap")
+
+fit_ranef <- glmer(
+  normalized_mentions ~ (1 | cbscode),
+  family = binomial(),
+  weights = n_location,
+  data = cholera_sub |> filter(year == 1866, month == 7)
+)
+
+```
+
+Doing the same predict-trick as before and plotting:
+
+```{r}
+cholera_sub |> filter(year == 1866, month == 7) |> mutate(prob = predict(fit_ranef, newdata = cholera_sub |> filter(year == 1866, month == 7), type = "response",  allow.new.levels = TRUE)) |> left_join(map, by = join_by(cbscode)) |> 
+  st_as_sf() |> 
+  ggplot(aes(fill = prob)) +
+  geom_sf(color = "transparent", size = 0.3) + 
+  scale_fill_disease +
+  theme_minimal() +
+  labs(
+    title = "Cholera mentions in July 1866 in the Netherlands",
+    subtitle = "Smoothed newspaper mentions probabilities",
+    fill = "Mention probability"
+  )
+```
+
+The random effect nicely smooths leaving relevant spatial features but removing outliers. Compare this image to the raw plot above.
+
+### Putting it all together
+
+```{r}
+#| label: spacetime
+#| eval: false
+
+library(mgcv)
+X <- smoothCon(s(month_number, k = 10, fx = TRUE), data = cholera_sub, knots = NULL)[[1]]$X-1
+opt <- glmerControl(optimizer = "nloptwrap", calc.derivs = FALSE)
+
+# NB: this model takes about 8 hours to run (!!!)
+fit_smooth <- glmer(
+  normalized_mentions ~ (1 + X | cbscode),
+  family = binomial(),
+  weights = n_location,
+  data = cholera_sub |> mutate(cbscode = as.factor(cbscode)),
+  control = opt, verbose = 2
+)
+
+```
+```{r}
+#| label: loadsmooth
+#| include: false
+#| echo: false
+#| 
+X <- smoothCon(s(month_number, k = 10, fx = TRUE), data = cholera_sub, knots = NULL)[[1]]$X-1
+fit_smooth <- read_rds("fs.rds")
+```
+
+Now, we can 
+```{r}
+#| label: plotsmooth
+#| 
+cholera_sub <- cholera_sub |> mutate(prob = predict(fit_smooth, newdata = cholera_sub, type = "response", allow.new.levels = TRUE))
+cholera_sub |> ggplot(aes(y = prob, x = date, group = cbscode)) +
+  geom_line(alpha = 0.05) +
+  theme_minimal() +
+  scale_x_date(date_breaks = "year", labels = year) +
+  labs(
+    title = "Cholera mentions in 1860s in the Netherlands",
+    subtitle = "Each line indicates one municipality",
+    x = ""
+  )
+
+cholera_sub |> 
+  filter(year == 1866, month > 3, month <11) |> 
+  left_join(map, by = join_by(cbscode)) |> 
+  st_as_sf() |> 
+  ggplot(aes(fill = prob)) +
+  geom_sf(color = "transparent", size = 0.3) + 
+  scale_fill_disease +
+  theme_minimal() +
+  labs(
+    title = "Cholera mentions in 1866 in the Netherlands",
+    subtitle = "Smoothed newspaper mentions probabilities",
+    fill = "Mention probability"
+  ) +
+  facet_grid(cols = vars(month(month, label = TRUE)))
+```
