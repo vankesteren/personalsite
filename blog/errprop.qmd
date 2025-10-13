@@ -4,6 +4,7 @@ author: "Erik-Jan van Kesteren"
 format: 
   html: 
     standalone: true
+    self-contained: true
 ---
 
 ```{r}
@@ -103,14 +104,20 @@ pxy
 ```
 
 
-Now, we create a model for each, using our penalized smooth estimator (but you can plug in anything you want, as long as it can do reasonable posterior simulation):
+Now, we create a model for each, using our penalized smooth estimator. You can use anything you want, as long as it can do reasonable posterior simulation with good (conditional) coverage. In other words, this should be a model that can (a) capture different types of relations, including nonlinear, (b) predict well (on average) in out-of-sample situations, and (c) accurately represent the residual noise. Penalized splines do all of this for a wide class of data-generating processes.
 
 ```{r}
 #| label: model
-#| echo: false
+#| echo: true
 
 mod_x <- gam(x ~ s(x_obs))
 mod_y <- gam(y ~ s(y_obs))
+
+```
+
+```{r}
+#| label: plotmodel
+#| echo: false
 
 # visualising the calibration model
 pred_df_y <- tibble(.row = 1:length(seq(-3, 3, .1)), y_obs = seq(-3, 3, .1))
@@ -135,6 +142,40 @@ df_pred <- bind_rows(df_xpred |> mutate(variable = "X"), df_ypred |> mutate(vari
 pxy +
   geom_ribbon(aes(ymin = lo, ymax = hi), data = df_pred, fill = "seagreen", alpha = 0.1, color = NA) +
   geom_line(data = df_pred, color = "seagreen") +
-  labs(subtitle = "Penalized spline measurement error models")
+  labs(title = "Penalized spline measurement error models")
 
 ```
+
+# Step 2: generate posterior samples
+
+After the calibration data, we collect our "real" data, where we don't have gold-standard "true" measurements available. What we do, then, is to predict those values from the observed data, and perform posterior sampling to adequately account for the uncertainty. For example, we can sample 200 times. Then, we simply run the model of interest on each dataset, and collect the results in a list:
+
+```{r}
+#| label: realdata
+#| echo: false
+
+# generate real data
+N <- 79
+x_true <- rnorm(N)
+y_true <- a + b*x_true + rnorm(N, sd = 0.2) 
+
+x_obs <- f_obs_x(x) + rnorm(N, sd = sd_obs_x)
+y_obs <- f_obs_y(y) + rnorm(N, sd = sd_obs_y)
+```
+
+
+```{r}
+#| label: sample
+#| echo: true
+
+sim_dat <- lapply(1:200, function(i) {
+  data.frame(
+    x = simulate(mod_x, data = data.frame(x_obs = x_obs))[,1],
+    y = simulate(mod_y, data = data.frame(y_obs = y_obs))[,1]
+  )
+})
+
+sim_fit <- lapply(sim_dat, function(df) lm(y ~ x, data = df))
+
+```
+
