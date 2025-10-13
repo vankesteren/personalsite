@@ -20,9 +20,9 @@ library(mice)
 
 ## Introduction
 
-Measurement error is becoming more common as labelling is occurring on ever-larger scales. For example, large language models (LLMs) are now routinely used to turn unstructured data into structured tables, essentially measuring constructs from this unstructured data. Our goal with these measurements, at least in the social sciences, is to investigate a certain real-world process or test a theory, generally by performing inference using a statistical model (such as linear regression). In this post, I show how to appropriately propagate measurement error in statistical models.
+Measurement error is becoming more common as automatic data labelling is occurring at large scale. For example, large language models (LLMs) are now routinely used to turn unstructured data into structured tables, essentially measuring particular constructs of interest. Our goal with these measurements, at least in the social sciences, is to investigate a certain real-world process or test a theory, generally by performing inference using a statistical model (such as linear regression). In this post, I show how to propagate measurement error resulting from the labelling to such a statistical model -- without having to do tedious derivations specific to a particular model type 🙂.
 
-Conceptually, assume a true value $X_{true}$ can be measured only with error. This error has two components: fixed (deterministic) and random (stochastic). For our purposes, the fixed error can be an offset (intercept) or it could be any function that is invertible over the domain of the data. 
+Conceptually, assume a true value $X_{true}$ can be measured only with error, yielding $X_{obs}$. This error has two components: fixed (deterministic) and random (stochastic). For our purposes, the fixed error can be an offset (intercept) or it could be any function that is invertible over the domain of the data. 
 
 ```{r}
 #| label: fixrand
@@ -58,7 +58,7 @@ ggplot(df, aes(x = obs, y = true, colour = label)) +
 
 ```
 
-To fix this, we are going to learn the fixed and random error from calibration data using a nonparametric model, in our case regularized smoothing splines through the `R` package `mgcv`. Then, we will use this model to generate posterior samples from newly obtained measurements (with error). Last, we fit the model of interest several times and pool the results using a trick from the multiple imputation literature.
+To fix this, we are going to learn the deterministic and stochastic error from calibration data using a nonparametric model, in our case regularized smoothing splines through the `R` package `mgcv`. Then, we will use this model to generate posterior samples from newly obtained measurements (with error). Last, we fit the model of interest several times and pool the results using a trick from the multiple imputation literature.
 
 
 # Step 1: Calibration model
@@ -155,13 +155,15 @@ After the calibration data, we collect our "real" data, where we don't have gold
 #| echo: false
 
 # generate real data
+set.seed(45)
 N <- 79
 x_true <- rnorm(N)
 y_true <- a + b*x_true + rnorm(N, sd = 0.2) 
 
-x_obs <- f_obs_x(x) + rnorm(N, sd = sd_obs_x)
-y_obs <- f_obs_y(y) + rnorm(N, sd = sd_obs_y)
+x_obs <- f_obs_x(x_true) + rnorm(N, sd = sd_obs_x)
+y_obs <- f_obs_y(y_true) + rnorm(N, sd = sd_obs_y)
 ```
+
 
 
 ```{r}
@@ -179,3 +181,60 @@ sim_fit <- lapply(sim_dat, function(df) lm(y ~ x, data = df))
 
 ```
 
+
+What we get, is a set of models based on corrected datasets. To get an intuition for the correction, below is a plot with the true (unobserved, hidden) data, the measured (observed, with error) data, and one posterior sample from the model-corrected data.
+
+```{r}
+tibble(
+  x = c(x_true, x_obs, sim_dat[[1]]$x), 
+  y = c(y_true, y_obs, sim_dat[[1]]$y),
+  type = as_factor(rep(c("True (unobserved)", "Measured", "Corrected (posterior sample)"), each = N))
+) |> 
+  ggplot(aes(x = x, y = y, color = type)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, formula = y~x) +
+  facet_grid(cols = vars(type)) +
+  labs(x = "X", y = "Y", title = "True, measured, and corrected data") +
+  scale_colour_brewer(palette = "Set2", guide = "none") +
+  theme_light()
+
+```
+
+In addition, I've plotted the regression lines. As shown, the third regression line looks a lot like the first, whereas the regression fitted on the measured model shows a quite different intercept and a flatter slope.
+
+# Step 3: Pooling multiple model fits
+
+To perform adequate inference, we need to combine the model fits we created by sampling from the posterior of the calibration model. There is a lot of existing research on this topic already, with most coming from the missing data literature on multiple imputation methods. Specifically, we can apply Rubin's pooling rules to combine the parameter estimates and their uncertainties to arrive at an overall inference for the parameters in the model.
+
+First, let's look at a model based on the unobserved "true" data, our target is to be as close as possible to these estimates:
+
+```{r}
+#| label: modtrue
+#| echo: true
+
+tidy(lm(y_true ~ x_true))
+```
+
+Then, let's look at the model we would get if we would naïvely apply regression on the uncorrected observed data:
+
+```{r}
+#| label: modobs
+#| echo: true
+
+tidy(lm(y_obs ~ x_obs))
+```
+
+Finally, let's pool the results from our posterior-sampled data.
+
+```{r}
+#| label: modpool
+#| echo: true
+
+summary(pool(sim_fit))
+```
+
+The naive model deviates strongly from the true model, whereas the pooled model fares much better in terms of the parameter estimates. The standard error of the pooled model are bigger, which reflects the uncertainty in the nonparametric measurement correction model. Pooling can be done in the `mice` package for many different inferential models, from simple linear regression to complex mixed model types.
+
+# Conclusion
+
+By learning a calibration model on data with stochastic and/or deterministic measurement error, we can correct inferences in a downstream analysis task through posterior sampling. A model pooling trick from the multiple imputation / missing data literature is used. This generalizes to any type of variable and any type of model, and assumes that the posterior distribution is correct.
