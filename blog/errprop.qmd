@@ -1,0 +1,140 @@
+---
+title: "Propagating uncertainty through nonparametric measurement modelling and posterior simulation"
+author: "Erik-Jan van Kesteren"
+format: 
+  html: 
+    standalone: true
+---
+
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+
+library(tidyverse)
+library(mgcv)
+library(gratia)
+library(mice)
+```
+
+## Introduction
+
+Measurement error is becoming more common as labelling is occurring on ever-larger scales. For example, large language models (LLMs) are now routinely used to turn unstructured data into structured tables, essentially measuring constructs from this unstructured data. Our goal with these measurements, at least in the social sciences, is to investigate a certain real-world process or test a theory, generally by performing inference using a statistical model (such as linear regression). In this post, I show how to appropriately propagate measurement error in statistical models.
+
+Conceptually, assume a true value $X_{true}$ can be measured only with error. This error has two components: fixed (deterministic) and random (stochastic). For our purposes, the fixed error can be an offset (intercept) or it could be any function that is invertible over the domain of the data. 
+
+```{r}
+#| label: fixrand
+#| echo: false
+#| include: true
+#| fig-width: 8
+#| fig-height: 3
+#| message: false
+
+set.seed(23)
+N <- 230
+x_true <- rnorm(N)
+err_rand <- rnorm(N, sd = 0.3)
+f <- \(x) 0.8*x - .15*x^2 + .1
+x_rand <- x_true + err_rand
+x_fix <- f(x_true)
+x_both <- f(x_fix + err_rand)
+
+df <- tibble(
+  true = rep(x_true, 4), 
+  obs = c(x_true, x_rand, x_fix, x_both), 
+  label = as_factor(rep(c("No error", "Random error", "Fixed error", "Both errors"), each = N))
+)
+
+ggplot(df, aes(x = obs, y = true, colour = label)) +
+  facet_grid(cols = vars(label)) +
+  coord_fixed() +
+  geom_point() +
+  geom_abline(slope = 1, linetype = "dashed", alpha = .5) +
+  labs(x = "Measured value", y = "True value", title = "Different types of measurement error") +
+  scale_colour_brewer(palette = "Set2", guide = "none") +
+  theme_light()
+
+```
+
+To fix this, we are going to learn the fixed and random error from calibration data using a nonparametric model, in our case regularized smoothing splines through the `R` package `mgcv`. Then, we will use this model to generate posterior samples from newly obtained measurements (with error). Last, we fit the model of interest several times and pool the results using a trick from the multiple imputation literature.
+
+
+# Step 1: Calibration model
+
+Assume we want to perform linear regression with a single predictor $X$ and a single outcome $Y$. After collecting calibration data, we notice that both are measured with error:
+
+```{r}
+#| label: xy error
+#| include: true
+#| echo: false
+N_cal <- 100
+
+b <- 0.45
+a <- -0.2
+
+f_obs_x <- function(x) x + 0.6*sin(1.5*x)
+sd_obs_x <- 0.15
+f_obs_y <- function(y) 0.91*y + 1
+sd_obs_y <- 0.1
+
+x <- rnorm(N_cal)
+y <- a + b*x + rnorm(N_cal, sd = 0.2) 
+
+x_obs <- f_obs_x(x) + rnorm(N_cal, sd = sd_obs_x)
+y_obs <- f_obs_y(y) + rnorm(N_cal, sd = sd_obs_y)
+
+pxy <- tibble(
+  true = c(x, y), 
+  observed = c(x_obs, y_obs), 
+  variable = as_factor(rep(c("X", "Y"), each = N_cal))
+) |> 
+  ggplot(aes(x = observed, y = true, colour = variable)) +
+  geom_point() +
+  geom_abline(slope = 1, linetype = "dashed", alpha = .5) +
+  coord_fixed() +
+  facet_grid(cols = vars(variable)) +
+  labs(x = "Measured value", y = "True value", title = "X and Y are measured with error") +
+  scale_colour_brewer(palette = "Set2", guide = "none") +
+  theme_light()
+
+pxy
+
+```
+
+
+Now, we create a model for each, using our penalized smooth estimator (but you can plug in anything you want, as long as it can do reasonable posterior simulation):
+
+```{r}
+#| label: model
+#| echo: false
+
+mod_x <- gam(x ~ s(x_obs))
+mod_y <- gam(y ~ s(y_obs))
+
+# visualising the calibration model
+pred_df_y <- tibble(.row = 1:length(seq(-3, 3, .1)), y_obs = seq(-3, 3, .1))
+df_ypred <- 
+  posterior_samples(mod_y, data = pred_df_y, n = 10000) |> 
+  group_by(.row) |> 
+  summarize(true = mean(.response), lo = quantile(.response, 0.055), hi = quantile(.response, 0.945)) |>
+  left_join(pred_df_y, by = join_by(.row)) |> 
+  rename(observed = y_obs)
+
+pred_df_x <- tibble(.row = 1:length(seq(-3, 3, .1)), x_obs = seq(-3, 3, .1))
+df_xpred <- 
+  posterior_samples(mod_x, data = pred_df_x, n = 10000) |> 
+  group_by(.row) |> 
+  summarize(true = mean(.response), lo = quantile(.response, 0.055), hi = quantile(.response, 0.945)) |>
+  left_join(pred_df_x, by = join_by(.row)) |> 
+  rename(observed = x_obs)
+
+df_pred <- bind_rows(df_xpred |> mutate(variable = "X"), df_ypred |> mutate(variable = "Y"))
+
+
+pxy +
+  geom_ribbon(aes(ymin = lo, ymax = hi), data = df_pred, fill = "seagreen", alpha = 0.1, color = NA) +
+  geom_line(data = df_pred, color = "seagreen") +
+  labs(subtitle = "Penalized spline measurement error models")
+
+```
