@@ -4,13 +4,14 @@ author: "Erik-Jan van Kesteren"
 format: 
   html:
     self-contained: true
+    standalone: true
 ---
 
 ## Introduction
 
 Generative adversarial networks (GANs) have been great at many synthetic generation things, e.g. [this person does not exist](https://thispersondoesnotexist.xyz). But that's complicated and hard to understand! In this post, I ask the question _how do GANs work on the smallest possible scale_? The goal is to create an intuitive conceptual understanding of GANs for people who are familiar with data, simulation, and a bit of neural networks (e.g., statisticians).
 
-![](gan.svg)
+![](img/gan.svg)
 
 The full code as an an R script can be found [here](https://gist.github.com/vankesteren/684de6a3f44597ac9e09158457b3c0d0).
 

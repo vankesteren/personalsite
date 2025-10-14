@@ -4,6 +4,8 @@ author: "Erik-Jan van Kesteren"
 format: 
   html:
     self-contained: true
+    self-contained-math: true
+    standalone: true
 ---
 
 The convex hull constraint in synthetic controls is said to produce sparse solutions for the weights. In this document, I show under which conditions this is the case (and when not!).

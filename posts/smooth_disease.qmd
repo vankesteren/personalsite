@@ -5,6 +5,7 @@ format:
   html:
     self-contained: true
     self-contained-math: true
+    standalone: true
 ---
 
 ```{r}
@@ -32,11 +33,14 @@ First, we load the raw data using `duckdb` and create two subsets containing onl
 
 ```{r}
 #| label: diseasedata
-#| 
+
+pq_path <- tempfile(fileext = ".parquet")
+ddb_url <- "https://github.com/sodascience/disease_database/releases/download/v1.2.0/disease_database_v1.2.parquet"
+download.file(ddb_url, pq_path, quiet = TRUE, mode = "wb")
+
 drv <- duckdb()
 con <- dbConnect(drv)
-db  <- 
-  tbl(con,"read_parquet('disease_database/**/*.parquet', hive_partitioning = true)")
+db  <- tbl(con, sprintf("read_parquet('%s')", pq_path))
 
 cholera_full <- 
   db |> 
