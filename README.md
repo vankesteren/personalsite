@@ -1,3 +1,3 @@
-### [erikjanvankesteren.nl](http://erikjanvankesteren.nl)
+### [erikjanvankesteren.nl](https://erikjanvankesteren.nl)
 
 A simpler personal website
