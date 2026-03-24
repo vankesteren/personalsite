@@ -1,5 +1,6 @@
 body {
     font-family: system-ui, sans-serif;
+    font-weight: 400;
     color: #DADADA;
     background-color: #343434;
     padding: 2rem;
@@ -39,6 +40,11 @@ a:hover {
     box-shadow: inset 0 -1.2rem 0 #4ba9af44;
 }
 
+main {
+    line-height: 150%;
+    max-width: 40rem;
+}
+
 .links {
     display: flex;
     flex-direction: row;
@@ -48,11 +54,6 @@ a:hover {
 
 .links>a {
     margin-right: 1rem;
-}
-
-.maintext {
-    line-height: 150%;
-    max-width: 40rem;
 }
 
 .portrait {
