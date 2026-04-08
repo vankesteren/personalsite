@@ -1,6 +1,11 @@
+@font-face {
+    font-family: atkinson;
+    src: url(AtkinsonHyperlegibleNextVF-Variable.ttf);
+}
+
 body {
-    font-family: system-ui, sans-serif;
-    font-weight: 400;
+    font-family: atkinson, system-ui, sans-serif;
+    font-weight: 300;
     color: #DADADA;
     background-color: #343434;
     padding: 2rem;
